@@ -13,7 +13,7 @@
     "status": "node ./packages/cli/src/index.mjs status",
     "log": "node ./packages/cli/src/index.mjs log",
     "handoff": "node ./packages/cli/src/index.mjs handoff",
-    "test": "node --test \"packages/core/test/*.test.mjs\"",
+    "test": "node --test",
     "test:smoke": "node ./packages/cli/src/index.mjs inspect --no-color && node ./packages/cli/src/index.mjs status --no-color && node ./packages/cli/src/index.mjs help"
   },
   "workspaces": [
