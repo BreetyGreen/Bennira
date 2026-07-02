@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900">
+<defs>
+<marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#71717a"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#10a37f"/>
+</marker>
+<marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#1d4ed8"/>
+</marker>
+<marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#f97316"/>
+</marker>
+</defs>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+</style>
+<rect width="1200" height="900" fill="#ffffff"/>
+<text x="600.0" y="40" text-anchor="middle" fill="#0d0d0d" font-size="24" font-weight="650">
+  <tspan x="600.0" dy="0">Bennira 长期内核架构图</tspan>
+</text>
+<text x="600.0" y="66" text-anchor="middle" fill="#6e6e80" font-size="13" font-weight="400">
+  <tspan x="600.0" dy="0">UI 可替换，模型可替换，工具和权限通过内核边界扩展</tspan>
+</text>
+<rect x="490" y="105" width="220" height="62" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="490" y="105" width="4" height="62" rx="2" ry="2" fill="#10a37f"/>
+<text x="600.0" y="128.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="600.0" dy="0">Interface</tspan>
+</text>
+<text x="600.0" y="150.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="600.0" dy="0">CLI / TUI / IDE / Desktop</tspan>
+</text>
+<rect x="490" y="195" width="220" height="62" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="490" y="195" width="4" height="62" rx="2" ry="2" fill="#10a37f"/>
+<text x="600.0" y="218.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="600.0" dy="0">Session</tspan>
+</text>
+<text x="600.0" y="240.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="600.0" dy="0">任务状态 / 用户确认</tspan>
+</text>
+<rect x="490" y="285" width="220" height="62" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="490" y="285" width="4" height="62" rx="2" ry="2" fill="#10a37f"/>
+<text x="600.0" y="308.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="600.0" dy="0">Agent Core</tspan>
+</text>
+<text x="600.0" y="330.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="600.0" dy="0">理解目标 / 规划 / 决策</tspan>
+</text>
+<rect x="205" y="385" width="220" height="62" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="205" y="385" width="4" height="62" rx="2" ry="2" fill="#1d4ed8"/>
+<text x="315.0" y="408.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="315.0" dy="0">Context Engine</tspan>
+</text>
+<text x="315.0" y="430.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="315.0" dy="0">Provider / Repo Map</tspan>
+</text>
+<rect x="490" y="385" width="220" height="62" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="490" y="385" width="4" height="62" rx="2" ry="2" fill="#10a37f"/>
+<text x="600.0" y="408.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="600.0" dy="0">Orchestrator</tspan>
+</text>
+<text x="600.0" y="430.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="600.0" dy="0">工具选择 / 重试 / 停止</tspan>
+</text>
+<rect x="775" y="385" width="220" height="62" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="775" y="385" width="4" height="62" rx="2" ry="2" fill="#71717a"/>
+<text x="885.0" y="408.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="885.0" dy="0">Model Adapter</tspan>
+</text>
+<text x="885.0" y="430.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="885.0" dy="0">OpenAI / Anthropic / 本地</tspan>
+</text>
+<rect x="350" y="505" width="220" height="62" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="350" y="505" width="4" height="62" rx="2" ry="2" fill="#f97316"/>
+<text x="460.0" y="528.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="460.0" dy="0">Tool Registry</tspan>
+</text>
+<text x="460.0" y="550.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="460.0" dy="0">schema / 风险 / 能力</tspan>
+</text>
+<rect x="630" y="505" width="220" height="62" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="630" y="505" width="4" height="62" rx="2" ry="2" fill="#f97316"/>
+<text x="740.0" y="528.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="740.0" dy="0">Permission Layer</tspan>
+</text>
+<text x="740.0" y="550.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="740.0" dy="0">读取 / 写入 / 执行 / 网络</tspan>
+</text>
+<rect x="490" y="625" width="220" height="62" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="490" y="625" width="4" height="62" rx="2" ry="2" fill="#f97316"/>
+<text x="600.0" y="648.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="600.0" dy="0">Executors</tspan>
+</text>
+<text x="600.0" y="670.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="600.0" dy="0">File / Patch / Shell / Git</tspan>
+</text>
+<ellipse cx="350.0" cy="759" rx="95.0" ry="14" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<path d="M 255,759 L 255,809 Q 350.0,833 445,809 L 445,759" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<ellipse cx="350.0" cy="809" rx="95.0" ry="14" fill="none" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="255" y="757" width="4" height="52" fill="#f97316"/>
+<text x="350.0" y="778.0" text-anchor="middle" fill="#0d0d0d" font-size="14" font-weight="650">
+  <tspan x="350.0" dy="0">Event Log</tspan>
+</text>
+<text x="350.0" y="799.0" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="350.0" dy="0">行动 / 结果 / 错误</tspan>
+</text>
+<rect x="505" y="745" width="190" height="78" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="505" y="745" width="4" height="78" rx="2" ry="2" fill="#f97316"/>
+<text x="600.0" y="776.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="600.0" dy="0">Handoff</tspan>
+</text>
+<text x="600.0" y="798.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="600.0" dy="0">跨工具恢复入口</tspan>
+</text>
+<ellipse cx="850.0" cy="759" rx="95.0" ry="14" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<path d="M 755,759 L 755,809 Q 850.0,833 945,809 L 945,759" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<ellipse cx="850.0" cy="809" rx="95.0" ry="14" fill="none" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="755" y="757" width="4" height="52" fill="#1d4ed8"/>
+<text x="850.0" y="778.0" text-anchor="middle" fill="#0d0d0d" font-size="14" font-weight="650">
+  <tspan x="850.0" dy="0">Project Memory</tspan>
+</text>
+<text x="850.0" y="799.0" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="850.0" dy="0">docs / 配置 / 摘要</tspan>
+</text>
+<line x1="600" y1="167" x2="600" y2="195" stroke="#10a37f" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<line x1="600" y1="257" x2="600" y2="285" stroke="#10a37f" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<line x1="490" y1="316" x2="315" y2="385" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="402.5" y="342.5" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="402.5" dy="0">收集上下文</tspan>
+</text>
+<line x1="600" y1="347" x2="600" y2="385" stroke="#10a37f" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<text x="600.0" y="358.0" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="600.0" dy="0">编排行动</tspan>
+</text>
+<line x1="710" y1="316" x2="885" y2="385" stroke="#71717a" stroke-width="1.6" marker-end="url(#arrow-gray)"/>
+<text x="797.5" y="342.5" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="797.5" dy="0">调用模型</tspan>
+</text>
+<line x1="600" y1="447" x2="460" y2="505" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<line x1="600" y1="447" x2="740" y2="505" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<path d="M 740,567 L 740,592 L 600,592 L 600,625" fill="none" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<line x1="600" y1="687" x2="350" y2="745" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<text x="475.0" y="708.0" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="475.0" dy="0">记录</tspan>
+</text>
+<line x1="600" y1="687" x2="600" y2="745" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<text x="600.0" y="708.0" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="600.0" dy="0">生成</tspan>
+</text>
+<line x1="600" y1="687" x2="850" y2="745" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="725.0" y="708.0" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="725.0" dy="0">沉淀</tspan>
+</text>
+<path d="M 850,745 L 850,710 L 130,710 L 130,416 L 205,416" fill="none" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="130" y="702" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="130" dy="0">恢复上下文</tspan>
+</text>
+<path d="M 850,784 L 1010,784 L 1010,226 L 710,226" fill="none" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="1010" y="218" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="1010" dy="0">恢复会话</tspan>
+</text>
+<line x1="370" y1="860" x2="404" y2="860" stroke="#10a37f" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+<text x="416" y="864" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="416" dy="0">主路径</tspan>
+</text>
+<line x1="486" y1="860" x2="520" y2="860" stroke="#1d4ed8" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+<text x="532" y="864" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="532" dy="0">读取/上下文</tspan>
+</text>
+<line x1="602" y1="860" x2="636" y2="860" stroke="#f97316" stroke-width="1.8" marker-end="url(#arrow-orange)"/>
+<text x="648" y="864" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="648" dy="0">写入/行动</tspan>
+</text>
+<line x1="718" y1="860" x2="752" y2="860" stroke="#71717a" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+<text x="764" y="864" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="764" dy="0">未来/辅助</tspan>
+</text>
+</svg>

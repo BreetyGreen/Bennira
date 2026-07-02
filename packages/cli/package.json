@@ -1,0 +1,27 @@
+{
+  "name": "@bennira/cli",
+  "version": "0.1.0-alpha.0",
+  "description": "Bennira CLI：小偷 Alpha —— 观察项目、生成 AGENTS.md、跨工具交接。",
+  "type": "module",
+  "bin": {
+    "bennira": "./src/index.mjs"
+  },
+  "dependencies": {
+    "@bennira/core": "0.1.0-alpha.0"
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BreetyGreen/Bennira.git",
+    "directory": "packages/cli"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="1200" height="720">
+<defs>
+<marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#71717a"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#10a37f"/>
+</marker>
+<marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#1d4ed8"/>
+</marker>
+<marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#f97316"/>
+</marker>
+</defs>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+</style>
+<rect width="1200" height="720" fill="#ffffff"/>
+<text x="600.0" y="40" text-anchor="middle" fill="#0d0d0d" font-size="24" font-weight="650">
+  <tspan x="600.0" dy="0">小偷 Alpha 实际架构图</tspan>
+</text>
+<text x="600.0" y="66" text-anchor="middle" fill="#6e6e80" font-size="13" font-weight="400">
+  <tspan x="600.0" dy="0">当前真实边界：观察、计划、记录、交接，不修改业务代码</tspan>
+</text>
+<rect x="85" y="135" width="190" height="70" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="85" y="135" width="4" height="70" rx="2" ry="2" fill="#10a37f"/>
+<text x="180.0" y="162.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="180.0" dy="0">CLI</tspan>
+</text>
+<text x="180.0" y="184.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="180.0" dy="0">inspect / init / status / plan / log / handoff</tspan>
+</text>
+<rect x="345" y="135" width="190" height="70" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="345" y="135" width="4" height="70" rx="2" ry="2" fill="#1d4ed8"/>
+<text x="440.0" y="162.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="440.0" dy="0">Workspace Inspector</tspan>
+</text>
+<text x="440.0" y="184.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="440.0" dy="0">根目录 / Git / 文件树</tspan>
+</text>
+<rect x="605" y="135" width="190" height="70" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="605" y="135" width="4" height="70" rx="2" ry="2" fill="#1d4ed8"/>
+<text x="700.0" y="162.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="700.0" dy="0">Context Reader</tspan>
+</text>
+<text x="700.0" y="184.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="700.0" dy="0">README / AGENTS / docs</tspan>
+</text>
+<rect x="865" y="135" width="190" height="70" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="865" y="135" width="4" height="70" rx="2" ry="2" fill="#10a37f"/>
+<text x="960.0" y="162.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="960.0" dy="0">Plan Generator</tspan>
+</text>
+<text x="960.0" y="184.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="960.0" dy="0">中文计划 / 下一步</tspan>
+</text>
+<ellipse cx="260.0" cy="379" rx="85.0" ry="14" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<path d="M 175,379 L 175,431 Q 260.0,455 345,431 L 345,379" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<ellipse cx="260.0" cy="431" rx="85.0" ry="14" fill="none" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="175" y="377" width="4" height="54" fill="#f97316"/>
+<text x="260.0" y="399.0" text-anchor="middle" fill="#0d0d0d" font-size="14" font-weight="650">
+  <tspan x="260.0" dy="0">Event Log</tspan>
+</text>
+<text x="260.0" y="420.0" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="260.0" dy="0">events.jsonl</tspan>
+</text>
+<ellipse cx="490.0" cy="379" rx="85.0" ry="14" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<path d="M 405,379 L 405,431 Q 490.0,455 575,431 L 575,379" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<ellipse cx="490.0" cy="431" rx="85.0" ry="14" fill="none" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="405" y="377" width="4" height="54" fill="#f97316"/>
+<text x="490.0" y="399.0" text-anchor="middle" fill="#0d0d0d" font-size="14" font-weight="650">
+  <tspan x="490.0" dy="0">State</tspan>
+</text>
+<text x="490.0" y="420.0" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="490.0" dy="0">state.json</tspan>
+</text>
+<rect x="635" y="365" width="170" height="80" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="635" y="365" width="4" height="80" rx="2" ry="2" fill="#1d4ed8"/>
+<text x="720.0" y="397.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="720.0" dy="0">Project Memory</tspan>
+</text>
+<text x="720.0" y="419.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="720.0" dy="0">last-plan / docs</tspan>
+</text>
+<rect x="865" y="365" width="170" height="80" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="865" y="365" width="4" height="80" rx="2" ry="2" fill="#f97316"/>
+<text x="950.0" y="397.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="950.0" dy="0">Handoff Writer</tspan>
+</text>
+<text x="950.0" y="419.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="950.0" dy="0">docs/HANDOFF.md</tspan>
+</text>
+<rect x="500" y="555" width="200" height="70" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="500" y="555" width="4" height="70" rx="2" ry="2" fill="#71717a"/>
+<text x="600.0" y="582.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="600.0" dy="0">Tech Graph Rules</tspan>
+</text>
+<text x="600.0" y="604.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="600.0" dy="0">docs/TECH_GRAPH.md</tspan>
+</text>
+<rect x="805" y="555" width="190" height="70" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="805" y="555" width="4" height="70" rx="2" ry="2" fill="#1d4ed8"/>
+<text x="900.0" y="582.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="900.0" dy="0">Status Summary</tspan>
+</text>
+<text x="900.0" y="604.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="900.0" dy="0">恢复摘要</tspan>
+</text>
+<line x1="275" y1="170" x2="345" y2="170" stroke="#10a37f" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<line x1="535" y1="170" x2="605" y2="170" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<line x1="795" y1="170" x2="865" y2="170" stroke="#10a37f" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<path d="M 960,205 L 960,280 L 260,280 L 260,365" fill="none" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<text x="260" y="272" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="260" dy="0">写入事件</tspan>
+</text>
+<path d="M 960,205 L 960,300 L 490,300 L 490,365" fill="none" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<text x="490" y="292" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="490" dy="0">更新状态</tspan>
+</text>
+<path d="M 960,205 L 960,320 L 720,320 L 720,365" fill="none" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="720" y="312" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="720" dy="0">写入计划</tspan>
+</text>
+<path d="M 960,205 L 960,365" fill="none" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<text x="960" y="357" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="960" dy="0">刷新交接</tspan>
+</text>
+<path d="M 260,445 L 260,505 L 900,505 L 900,555" fill="none" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="900" y="497" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="900" dy="0">恢复读取</tspan>
+</text>
+<path d="M 490,445 L 490,500 L 900,500 L 900,555" fill="none" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<path d="M 720,445 L 720,495 L 900,495 L 900,555" fill="none" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<line x1="700" y1="590" x2="805" y2="590" stroke="#71717a" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#arrow-gray)"/>
+<text x="752.5" y="582.0" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="752.5" dy="0">规范图谱</tspan>
+</text>
+<line x1="370" y1="675" x2="404" y2="675" stroke="#10a37f" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+<text x="416" y="679" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="416" dy="0">主路径</tspan>
+</text>
+<line x1="486" y1="675" x2="520" y2="675" stroke="#1d4ed8" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+<text x="532" y="679" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="532" dy="0">读取/上下文</tspan>
+</text>
+<line x1="602" y1="675" x2="636" y2="675" stroke="#f97316" stroke-width="1.8" marker-end="url(#arrow-orange)"/>
+<text x="648" y="679" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="648" dy="0">写入/行动</tspan>
+</text>
+<line x1="718" y1="675" x2="752" y2="675" stroke="#71717a" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+<text x="764" y="679" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="764" dy="0">未来/辅助</tspan>
+</text>
+</svg>

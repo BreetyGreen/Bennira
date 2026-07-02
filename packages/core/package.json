@@ -1,0 +1,27 @@
+{
+  "name": "@bennira/core",
+  "version": "0.1.0-alpha.0",
+  "description": "Bennira 核心：项目观察、记忆、配置分层、模型接入与展示层。",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BreetyGreen/Bennira.git",
+    "directory": "packages/core"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

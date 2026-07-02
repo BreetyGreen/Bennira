@@ -1,0 +1,30 @@
+{
+  "name": "bennira",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "description": "Bennira 一代 - 小偷 Alpha",
+  "type": "module",
+  "bin": {
+    "bennira": "./packages/cli/src/index.mjs"
+  },
+  "scripts": {
+    "bennira": "node ./packages/cli/src/index.mjs",
+    "inspect": "node ./packages/cli/src/index.mjs inspect",
+    "status": "node ./packages/cli/src/index.mjs status",
+    "log": "node ./packages/cli/src/index.mjs log",
+    "handoff": "node ./packages/cli/src/index.mjs handoff",
+    "test": "node --test \"packages/core/test/*.test.mjs\"",
+    "test:smoke": "node ./packages/cli/src/index.mjs inspect --no-color && node ./packages/cli/src/index.mjs status --no-color && node ./packages/cli/src/index.mjs help"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BreetyGreen/Bennira.git"
+  },
+  "license": "MIT"
+}

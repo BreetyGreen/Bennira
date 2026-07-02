@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420">
+<defs>
+<marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#71717a"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#10a37f"/>
+</marker>
+<marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#1d4ed8"/>
+</marker>
+<marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#f97316"/>
+</marker>
+</defs>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+</style>
+<rect width="1200" height="420" fill="#ffffff"/>
+<text x="600.0" y="40" text-anchor="middle" fill="#0d0d0d" font-size="24" font-weight="650">
+  <tspan x="600.0" dy="0">Bennira 产品内核流程图</tspan>
+</text>
+<text x="600.0" y="66" text-anchor="middle" fill="#6e6e80" font-size="13" font-weight="400">
+  <tspan x="600.0" dy="0">核心链路不是聊天，而是把想法沉淀成可恢复项目状态</tspan>
+</text>
+<rect x="55" y="160" width="110" height="66" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="55" y="160" width="4" height="66" rx="2" ry="2" fill="#10a37f"/>
+<text x="110.0" y="185.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="110.0" dy="0">想法</tspan>
+</text>
+<text x="110.0" y="207.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="110.0" dy="0">用户原始表达</tspan>
+</text>
+<line x1="165" y1="193" x2="195" y2="193" stroke="#10a37f" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<rect x="195" y="160" width="110" height="66" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="195" y="160" width="4" height="66" rx="2" ry="2" fill="#10a37f"/>
+<text x="250.0" y="185.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="250.0" dy="0">定位</tspan>
+</text>
+<text x="250.0" y="207.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="250.0" dy="0">产品主张</tspan>
+</text>
+<line x1="305" y1="193" x2="335" y2="193" stroke="#10a37f" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<rect x="335" y="160" width="110" height="66" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="335" y="160" width="4" height="66" rx="2" ry="2" fill="#10a37f"/>
+<text x="390.0" y="185.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="390.0" dy="0">需求</tspan>
+</text>
+<text x="390.0" y="207.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="390.0" dy="0">范围与约束</tspan>
+</text>
+<line x1="445" y1="193" x2="475" y2="193" stroke="#10a37f" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<rect x="475" y="160" width="110" height="66" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="475" y="160" width="4" height="66" rx="2" ry="2" fill="#10a37f"/>
+<text x="530.0" y="185.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="530.0" dy="0">架构</tspan>
+</text>
+<text x="530.0" y="207.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="530.0" dy="0">内核边界</tspan>
+</text>
+<line x1="585" y1="193" x2="615" y2="193" stroke="#10a37f" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+<rect x="615" y="160" width="110" height="66" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="615" y="160" width="4" height="66" rx="2" ry="2" fill="#10a37f"/>
+<text x="670.0" y="185.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="670.0" dy="0">小步任务</tspan>
+</text>
+<text x="670.0" y="207.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="670.0" dy="0">可执行下一步</tspan>
+</text>
+<line x1="725" y1="193" x2="755" y2="193" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<rect x="755" y="160" width="110" height="66" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="755" y="160" width="4" height="66" rx="2" ry="2" fill="#f97316"/>
+<text x="810.0" y="185.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="810.0" dy="0">工具行动</tspan>
+</text>
+<text x="810.0" y="207.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="810.0" dy="0">读写/命令/验证</tspan>
+</text>
+<line x1="865" y1="193" x2="895" y2="193" stroke="#f97316" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+<rect x="895" y="160" width="110" height="66" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="895" y="160" width="4" height="66" rx="2" ry="2" fill="#f97316"/>
+<text x="950.0" y="185.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="950.0" dy="0">验证</tspan>
+</text>
+<text x="950.0" y="207.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="950.0" dy="0">结果检查</tspan>
+</text>
+<line x1="1005" y1="193" x2="1035" y2="193" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<rect x="1035" y="160" width="110" height="66" rx="8" ry="8" fill="#ffffff" stroke="#e5e5e5" stroke-width="1.5"/>
+<rect x="1035" y="160" width="4" height="66" rx="2" ry="2" fill="#1d4ed8"/>
+<text x="1090.0" y="185.0" text-anchor="middle" fill="#0d0d0d" font-size="15" font-weight="650">
+  <tspan x="1090.0" dy="0">记忆沉淀</tspan>
+</text>
+<text x="1090.0" y="207.0" text-anchor="middle" fill="#6e6e80" font-size="12" font-weight="400">
+  <tspan x="1090.0" dy="0">文档/日志/交接</tspan>
+</text>
+<path d="M 1090,226 L 1090,310 L 670,310 L 670,226" fill="none" stroke="#1d4ed8" stroke-width="1.6" marker-end="url(#arrow-blue)"/>
+<text x="670" y="302" text-anchor="middle" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="670" dy="0">恢复继续</tspan>
+</text>
+<line x1="370" y1="365" x2="404" y2="365" stroke="#10a37f" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+<text x="416" y="369" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="416" dy="0">主路径</tspan>
+</text>
+<line x1="486" y1="365" x2="520" y2="365" stroke="#1d4ed8" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+<text x="532" y="369" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="532" dy="0">读取/上下文</tspan>
+</text>
+<line x1="602" y1="365" x2="636" y2="365" stroke="#f97316" stroke-width="1.8" marker-end="url(#arrow-orange)"/>
+<text x="648" y="369" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="648" dy="0">写入/行动</tspan>
+</text>
+<line x1="718" y1="365" x2="752" y2="365" stroke="#71717a" stroke-width="1.8" marker-end="url(#arrow-gray)"/>
+<text x="764" y="369" text-anchor="start" fill="#6e6e80" font-size="11" font-weight="400">
+  <tspan x="764" dy="0">未来/辅助</tspan>
+</text>
+</svg>

@@ -1,0 +1,43 @@
+# Bennira CI —— push / PR 时自动跑核心单测 + CLI 冒烟测试。
+#
+# 重要：本流水线【不需要任何 API key】。
+#   - 单测（node:test）只覆盖纯逻辑：配置分层、凭证优先级、plan 解析、主题降级，
+#     用假 key 字符串验证"该选哪个来源"，从不联网、不校验 key 真伪。
+#   - 冒烟测试只跑纯本地只读命令（inspect / status / help），不触发 init / plan（那两个才需模型）。
+# 因此 CI 环境无凭证也能全绿，这正是良好测试设计的结果。
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    name: 单测 + 冒烟测试
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 与 package.json engines(>=20) 对齐：在 LTS 20 与当前 22 上都验证。
+        node-version: ["20", "22"]
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # 建立 workspace symlink（@bennira/cli ← @bennira/core），CLI 才能解析包名依赖。
+      - name: 安装依赖（建立 workspace 链接）
+        run: npm install
+
+      - name: 运行核心单测（离线，无需 key）
+        run: npm test
+
+      - name: CLI 冒烟测试（纯本地只读命令）
+        run: npm run test:smoke
