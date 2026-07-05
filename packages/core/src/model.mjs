@@ -16,21 +16,134 @@ import { resolveModelCredentials } from "./secrets.mjs";
 // 选中即自动带出 baseURL / 默认模型名，用户只剩"粘 key"一步。
 // 想用冷门服务的人选 custom，回到手填 —— 灵活性一点不丢。
 //
-// 每项：{ id, label, baseURL, model, hint }。custom 的 baseURL/model 为空，
+// 每项：{ id, label, baseURL, model, hint, models }。custom 的 baseURL/model 为空，
 // 表示"由用户手填"。顺序即菜单顺序，DeepSeek 放第一（用户当前就用它）。
+//
+// models —— 「内置模型目录」（策略一）。这是对齐 openclaw「初始化就能选」体验的关键：
+//   一份编译进工具的静态精选清单，不依赖 key、不联网，选完服务商立刻能弹菜单挑。
+//   它回答「这个工具支持接哪些模型」；填了 key 后再用 listModels 实时拉取叠加校准
+//   （策略二，回答「你的 key 有权访问哪些」）。两者由 mergeModelLists 合并去重。
+//   model（默认款）应出现在 models 里并作为菜单默认高亮。custom 无目录，仍走手填。
 export const PROVIDER_PRESETS = Object.freeze([
-  { id: "deepseek", label: "DeepSeek",        baseURL: "https://api.deepseek.com",   model: "deepseek-chat",  hint: "深度求索 · 高性价比" },
-  { id: "openai",   label: "OpenAI",          baseURL: "https://api.openai.com/v1",  model: "gpt-4o-mini",    hint: "GPT 系列" },
-  { id: "kimi",     label: "Kimi / 月之暗面",  baseURL: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k", hint: "长上下文见长" },
-  { id: "qwen",     label: "通义千问 Qwen",    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus", hint: "阿里云 · 兼容模式" },
-  { id: "zhipu",    label: "智谱 GLM",         baseURL: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4",  hint: "GLM 系列" },
-  { id: "ollama",   label: "本地 Ollama",      baseURL: "http://localhost:11434/v1",  model: "llama3",         hint: "本地运行 · 免 key" },
-  { id: "custom",   label: "自定义…",          baseURL: "",                           model: "",               hint: "手填 baseURL 与模型名" },
+  {
+    id: "deepseek", label: "DeepSeek", baseURL: "https://api.deepseek.com",
+    model: "deepseek-chat", hint: "深度求索 · 高性价比",
+    models: ["deepseek-chat", "deepseek-reasoner"],
+  },
+  {
+    id: "openai", label: "OpenAI", baseURL: "https://api.openai.com/v1",
+    model: "gpt-4o-mini", hint: "GPT 系列",
+    models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1", "gpt-4.1-mini", "o3-mini", "o1-mini"],
+  },
+  {
+    id: "kimi", label: "Kimi / 月之暗面", baseURL: "https://api.moonshot.cn/v1",
+    model: "moonshot-v1-8k", hint: "长上下文见长",
+    models: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k", "kimi-k2-0711-preview"],
+  },
+  {
+    id: "qwen", label: "通义千问 Qwen", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    model: "qwen-plus", hint: "阿里云 · 兼容模式",
+    models: ["qwen-plus", "qwen-turbo", "qwen-max", "qwen2.5-72b-instruct", "qwen2.5-coder-32b-instruct"],
+  },
+  {
+    id: "zhipu", label: "智谱 GLM", baseURL: "https://open.bigmodel.cn/api/paas/v4",
+    model: "glm-4", hint: "GLM 系列",
+    models: ["glm-4", "glm-4-plus", "glm-4-air", "glm-4-flash", "glm-4-long"],
+  },
+  {
+    id: "ollama", label: "本地 Ollama", baseURL: "http://localhost:11434/v1",
+    model: "llama3", hint: "本地运行 · 免 key",
+    models: ["llama3", "llama3.1", "qwen2.5", "qwen2.5-coder", "gemma2", "mistral", "phi3"],
+  },
+  {
+    id: "custom", label: "自定义…", baseURL: "", model: "", hint: "手填 baseURL 与模型名",
+    models: [],
+  },
 ]);
 
 // 按 id 取预设；找不到返回 undefined（调用方兜底为 custom）。
 export function findProviderPreset(id) {
   return PROVIDER_PRESETS.find((p) => p.id === id);
+}
+
+// 取某服务商的内置模型目录（策略一）。找不到 / custom 返回空数组。
+// 调用方（setup）据此在「未填 key」时就能给出可选菜单。
+export function builtinModels(providerId) {
+  const preset = findProviderPreset(providerId);
+  return preset && Array.isArray(preset.models) ? [...preset.models] : [];
+}
+
+// 合并「内置目录」与「实时拉取」两份清单（策略一 + 策略二叠加）。
+// -----------------------------------------------------------------------------
+// 规则：内置目录在前（精选、稳定、顺序有意义），实时拉取里的新模型按字母序补在后面。
+// 去重（内置已有的实时结果不重复）。任一为空都能正确退化为另一份。
+export function mergeModelLists(builtin, fetched) {
+  const head = Array.isArray(builtin) ? builtin.filter((s) => typeof s === "string" && s) : [];
+  const tail = Array.isArray(fetched) ? fetched.filter((s) => typeof s === "string" && s) : [];
+  const seen = new Set(head);
+  const extras = [...new Set(tail)].filter((id) => !seen.has(id)).sort((a, b) => a.localeCompare(b));
+  return [...head, ...extras];
+}
+
+// 把 baseURL 归一成 {baseURL}/v1/models 端点。与 provider.endpoint() 同源逻辑：
+// 用户可能填到 /v1、裸域名或已带 /models，三种都拼对。
+function modelsEndpoint(baseURL) {
+  const base = String(baseURL || "").replace(/\/+$/, "");
+  if (/\/models$/.test(base)) return base;
+  if (/\/v1$/.test(base)) return `${base}/models`;
+  return `${base}/v1/models`;
+}
+
+// 拉取服务商的模型列表（OpenAI 兼容 GET {baseURL}/v1/models）。
+// -----------------------------------------------------------------------------
+// 这是 setup 里「选模型」体验的来源：填完 key 后调它，把 data[].id 做成菜单。
+// 关键前提——除本地 Ollama 外，这个接口都要求带 key 才有权限。所以调用方必须
+// 保证「先填 key、再拉列表」的顺序（key 在手才拉得到），否则会 401。
+//
+// 失败策略：不抛崩溃，返回 { ok, models, error }。上层据此决定「用列表选」还是
+// 「降级回手填」——网络不通 / 无 key / 老服务不支持 /models，都要能优雅兜底。
+export async function listModels(baseURL, apiKey, { signal, timeoutMs = 8000 } = {}) {
+  if (!baseURL) return { ok: false, models: [], error: "缺少 baseURL" };
+  const endpoint = modelsEndpoint(baseURL);
+  const link = linkAbort(signal, timeoutMs);
+  let response;
+  try {
+    const headers = { Accept: "application/json" };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    response = await fetch(endpoint, { method: "GET", headers, signal: link.signal });
+  } catch (error) {
+    if (link.signal.aborted) {
+      const reason = classifyAbort(link.signal.reason, timeoutMs);
+      return { ok: false, models: [], error: reason.message, aborted: reason instanceof UserAbortError };
+    }
+    return { ok: false, models: [], error: `无法连接：${error?.message || error}` };
+  } finally {
+    link.cleanup();
+  }
+
+  if (!response.ok) {
+    const body = await safeText(response);
+    return { ok: false, models: [], error: `服务返回 ${response.status}：${body.slice(0, 160)}`, status: response.status };
+  }
+
+  const data = await response.json().catch(() => null);
+  // 兼容两种形态：OpenAI 的 { data:[{id}] }，与个别服务直接返回 { models:[...] } 或数组。
+  const rawList = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data?.models)
+        ? data.models
+        : [];
+  const models = rawList
+    .map((m) => (typeof m === "string" ? m : m?.id || m?.name))
+    .filter((id) => typeof id === "string" && id.length > 0);
+  // 去重 + 稳定排序（字母序，便于在菜单里找）。
+  const unique = [...new Set(models)].sort((a, b) => a.localeCompare(b));
+  if (unique.length === 0) {
+    return { ok: false, models: [], error: "服务未返回任何模型" };
+  }
+  return { ok: true, models: unique };
 }
 
 export class NetworkDeniedError extends Error {
