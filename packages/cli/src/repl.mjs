@@ -58,10 +58,17 @@ const HISTORY_LIMIT = 500; // 命令历史保留条数
 const MAX_MENTION_CHARS = 8000; // 单个 @文件注入上下文的字符上限
 const MAX_FILE_CANDIDATES = 2000; // @补全候选文件数上限（防超大仓库遍历爆炸）
 
-export async function repl(args) {
+export async function repl(args, opts = {}) {
   const root = inspectWorkspace(process.cwd()).root;
   const config = readConfig(root);
-  const t = createTheme(config, args.includes("--no-color") ? { enabled: false } : {});
+  const forcePlain = args.includes("--no-color");
+  // 背景明暗由 CLI 入口探测后透传（OSC 11）。config.theme.appearance 手动值在 createTheme 内更优先。
+  const themeOpts = forcePlain
+    ? { enabled: false }
+    : opts.background
+      ? { background: opts.background }
+      : {};
+  const t = createTheme(config, themeOpts);
   const g = t.glyphs;
 
   const rd = modelReadiness(root, config);

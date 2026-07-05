@@ -7,6 +7,7 @@ import {
   buildPlanMessages,
   createProvider,
   createTheme,
+  queryTerminalBackground,
   createSpinner,
   ensureProjectMemory,
   formatEvents,
@@ -51,14 +52,33 @@ import { repl } from "./repl.mjs";
 
 const [, , command = "repl", ...args] = process.argv;
 
+// 终端背景明暗：启动时探测一次，之后所有 loadTheme 复用（避免每次重发 OSC 11）。
+// 优先级：config.theme.appearance（手动锁定）> OSC 11 实测 > COLORFGBG > 深色兜底。
+// 这里存 OSC 11 的实测结果；config 手动值在 createTheme 内部按更高优先级覆盖。
+let DETECTED_BACKGROUND; // "light" | "dark" | undefined（未探到，交给下游兜底）
+
 // 根据 config + 当前终端能力构建主题渲染器。--no-color / NO_COLOR 会自动降级。
+// background 传探测结果；createTheme 内部仍会让 config.theme.appearance 优先。
 function loadTheme(root, args = []) {
   const config = readConfig(root);
   const forcePlain = args.includes("--no-color");
-  return createTheme(config, forcePlain ? { enabled: false } : {});
+  if (forcePlain) return createTheme(config, { enabled: false });
+  return createTheme(config, DETECTED_BACKGROUND ? { background: DETECTED_BACKGROUND } : {});
+}
+
+// 是否需要探测背景：纯文本输出（--no-color / 非 TTY）时无意义，跳过以免拖慢 / 吞输入。
+function shouldDetectBackground(args = []) {
+  if (args.includes("--no-color")) return false;
+  if (process.env.NO_COLOR) return false;
+  return Boolean(process.stdout.isTTY && process.stdin.isTTY);
 }
 
 try {
+  // 上色前先探一次背景色（OSC 11）。非交互 / 纯文本场景直接跳过，零副作用。
+  if (shouldDetectBackground(args)) {
+    const bg = await queryTerminalBackground();
+    if (bg === "light" || bg === "dark") DETECTED_BACKGROUND = bg;
+  }
   await run(command, args);
 } catch (error) {
   if (process.env.BENNIRA_DEBUG) {
@@ -76,7 +96,7 @@ async function run(name, args) {
     case "repl":
     case "chat":
     case "shell":
-      return repl(args);
+      return repl(args, { background: DETECTED_BACKGROUND });
     case "inspect":
       return inspect(args);
     case "init":
@@ -676,10 +696,37 @@ function theme(args) {
       console.log(`${nt.success(nt.glyphs.found)} ${nt.value("已清除所有自定义覆盖，回到预设配色。")}`);
       return;
     }
+    case "appearance":
+    case "bg": {
+      const mode = rest[0];
+      if (!mode || !["light", "dark", "auto"].includes(mode)) {
+        console.error("用法：bennira theme appearance <light|dark|auto>");
+        console.error("  light=浅色终端(深字盘)  dark=深色终端  auto=自动探测(默认)");
+        process.exitCode = 1;
+        return;
+      }
+      updateThemeConfig(root, { appearance: mode });
+      appendEvent(root, {
+        type: "theme",
+        summary: `设置终端明暗为 ${mode}`,
+        files: [".bennira/config.json"],
+        result: "success",
+        tool: "bennira theme appearance",
+        risk: "low",
+      });
+      // 手动锁定后立即用锁定值重建主题预览（不再依赖本次探测结果）。
+      const forced = mode === "auto" ? loadTheme(root, args) : createTheme(readConfig(root), { background: mode });
+      const label = mode === "auto" ? "自动探测（OSC 11 / COLORFGBG）" : mode === "light" ? "浅色终端（深字盘）" : "深色终端";
+      console.log(`${forced.success(forced.glyphs.found)} ${forced.value("已设置终端明暗为")} ${forced.accent(label)}`);
+      console.log(forced.muted("  预览："));
+      console.log(`  ${forced.title("Bennira 一代 · 小偷")}`);
+      console.log(`  ${forced.value("这是正文示例")} ${forced.muted("这是次要信息")} ${forced.accent("这是命令名")}`);
+      return;
+    }
     default: {
       console.error(`未知 theme 子命令：${sub}`);
       const nt = loadTheme(root, args);
-      console.log(nt.muted("可用：list | show | use <id> | set <token> <#hex> | reset"));
+      console.log(nt.muted("可用：list | show | use <id> | set <token> <#hex> | appearance <light|dark|auto> | reset"));
       process.exitCode = 1;
     }
   }
@@ -876,11 +923,12 @@ function help() {
       line('bennira plan [--no-write] "中文想法"', "结合项目状态生成下一步计划（需先接模型）"),
       line("bennira log [path] [--limit 20]", "查看最近事件"),
       line("bennira handoff [path]", "刷新 docs/HANDOFF.md"),
-      line("bennira theme [list|show|use|set|reset]", "查看 / 切换 / 自定义配色"),
+      line("bennira theme [list|show|use|set|appearance|reset]", "查看 / 切换 / 自定义配色"),
       line("bennira key [list|add|use|remove]", "管理多把模型 API key（切换 / 增删）"),
       "",
       t.heading("配色"),
       `  ${t.muted(g.arrow)} ${t.value("一代默认盗贼紫（缇利翁）。八方旅人职业预设可一键切换。")}`,
+      `  ${t.muted(g.arrow)} ${t.value("浅色终端自动适配深字盘；也可 bennira theme appearance light 手动锁定。")}`,
       `  ${t.muted(g.arrow)} ${t.value("追加 --no-color 或设置 NO_COLOR 可强制纯文本输出。")}`,
       "",
       t.heading("能力"),

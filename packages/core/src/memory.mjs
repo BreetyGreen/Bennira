@@ -221,6 +221,12 @@ export function updateThemeConfig(root, patch = {}, { scope = SCOPES.PROJECT } =
   if (patch.custom && typeof patch.custom === "object" && patch.custom.id) {
     theme.custom = { ...theme.custom, [patch.custom.id]: patch.custom.theme };
   }
+  // 明暗盘手动覆盖：light / dark 固定，auto（或 null）删除该键回到自动探测。
+  if (patch.appearance === "light" || patch.appearance === "dark") {
+    theme.appearance = patch.appearance;
+  } else if (patch.appearance === "auto" || patch.appearance === null) {
+    delete theme.appearance;
+  }
 
   config.theme = theme;
   writeConfig(root, config, { scope });

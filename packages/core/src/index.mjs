@@ -39,6 +39,8 @@ export {
   DEFAULT_THEME_ID,
   supportsColor,
   detectBackground,
+  parseOsc11Response,
+  queryTerminalBackground,
   isThemeUnlocked,
   resolveThemeSpec,
   createTheme,

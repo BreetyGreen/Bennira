@@ -315,14 +315,120 @@ export function detectBackground(env = process.env) {
   return "unknown";
 }
 
-// 决定用深色盘还是浅色盘：显式 background > config.theme.appearance > 默认深色。
-// 只有明确判定为 "light" 才切浅色盘，其余（dark / unknown / auto 未探到）全走深色，
-// 保证 resolveThemeSpec({}) 无参时恒为深色盘（brand #9b6bd8），不破坏既有契约。
+// OSC 11 背景色查询 ----------------------------------------------------------
+//
+// COLORFGBG 只有 iTerm2/konsole 等少数终端会设，macOS Terminal.app 根本不设，
+// 导致 detectBackground 永远 unknown、浅色适配从不触发。更可靠的办法是 OSC 11：
+// 向终端写 `ESC ] 11 ; ? BEL`，支持的终端（含 Terminal.app / iTerm2 / kitty /
+// Windows Terminal 等）会回 `ESC ] 11 ; rgb:RRRR/GGGG/BBBB ESC \`（或 BEL 收尾）。
+// 据回传的 RGB 算相对亮度即可判明暗，不依赖任何环境变量。
+
+// 解析 OSC 11 应答，抽出背景 RGB 并判明暗。纯函数、可单测（无需真终端）。
+// 兼容 16-bit（rgb:ffff/ffff/ffff）与 8-bit（rgb:ff/ff/ff）两种位宽。
+export function parseOsc11Response(raw) {
+  if (typeof raw !== "string") return "unknown";
+  // 允许应答里夹杂其他转义；只抓 rgb:XXXX/XXXX/XXXX 片段。
+  const m = raw.match(/rgb:([0-9a-fA-F]+)\/([0-9a-fA-F]+)\/([0-9a-fA-F]+)/);
+  if (!m) return "unknown";
+  const toByte = (hex) => {
+    // 各通道位宽可能是 1~4 个 hex 位，统一归一化到 0-255。
+    const v = parseInt(hex, 16);
+    const max = 16 ** hex.length - 1;
+    if (!Number.isFinite(v) || max <= 0) return 0;
+    return Math.round((v / max) * 255);
+  };
+  const r = toByte(m[1]);
+  const g = toByte(m[2]);
+  const b = toByte(m[3]);
+  // 相对亮度（sRGB 感知加权）。阈值 128：偏亮=浅底，偏暗=深底。
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  return luminance >= 128 ? "light" : "dark";
+}
+
+// 向终端发 OSC 11 查询并读回应答，判定背景明暗。异步，带超时兜底。
+// 探测不到 / 非 TTY / 超时 → "unknown"，上层按深色兜底（行为与旧版一致）。
+// 关键：查询期间临时进 raw mode 抓单次应答，结束立即恢复，绝不吞用户输入。
+export function queryTerminalBackground(options = {}) {
+  const input = options.input || process.stdin;
+  const output = options.output || process.stdout;
+  const timeoutMs = options.timeoutMs ?? 120;
+
+  return new Promise((resolve) => {
+    // 前置守卫：任一端非 TTY，或无法进 raw mode，直接放弃（不阻塞、不报错）。
+    if (
+      !input ||
+      !output ||
+      !input.isTTY ||
+      !output.isTTY ||
+      typeof input.setRawMode !== "function" ||
+      typeof output.write !== "function"
+    ) {
+      resolve("unknown");
+      return;
+    }
+
+    let settled = false;
+    let buffer = "";
+    const prevRaw = input.isRaw;
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      input.removeListener("data", onData);
+      try {
+        if (!prevRaw) input.setRawMode(false);
+      } catch {
+        /* 忽略：某些环境 setRawMode 可能抛错 */
+      }
+      // 查询期间我们 resume 了 stdin；若原本是暂停态则恢复暂停，避免误吞后续输入。
+      if (options.pauseAfter !== false) {
+        try {
+          input.pause();
+        } catch {
+          /* noop */
+        }
+      }
+    };
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const onData = (chunk) => {
+      buffer += chunk.toString("latin1");
+      // 收到完整的 OSC 11 应答（ST=ESC\ 或 BEL 收尾）即可解析。
+      if (/rgb:[0-9a-fA-F]+\/[0-9a-fA-F]+\/[0-9a-fA-F]+/.test(buffer)) {
+        finish(parseOsc11Response(buffer));
+      }
+    };
+
+    try {
+      input.setRawMode(true);
+      input.resume();
+      input.on("data", onData);
+      // OSC 11 查询序列：ESC ] 11 ; ? BEL
+      output.write("\u001b]11;?\u0007");
+    } catch {
+      finish("unknown");
+      return;
+    }
+
+    timer = setTimeout(() => finish(buffer ? parseOsc11Response(buffer) : "unknown"), timeoutMs);
+  });
+}
+
+// 决定用深色盘还是浅色盘。优先级：
+//   config.theme.appearance（用户手动锁定）> options.background（OSC11/COLORFGBG 实测）> 深色兜底。
+// 手动值最强：即便探测说深色，用户显式设 light 也照切（透明终端 / 探测误判时的逃生口）。
+// 无任何信号 → 深色，保证 resolveThemeSpec({}) 恒为深色盘（brand #9b6bd8），不破坏既有契约。
 function resolveAppearance(themeConfig, options) {
-  const explicit = options.background;
-  if (explicit === "light" || explicit === "dark") return explicit;
   const pref = themeConfig && themeConfig.appearance;
   if (pref === "light" || pref === "dark") return pref;
+  const explicit = options.background;
+  if (explicit === "light" || explicit === "dark") return explicit;
   return "dark";
 }
 
