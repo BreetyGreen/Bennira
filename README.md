@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
 ![Zero deps](https://img.shields.io/badge/dependencies-0-blue.svg)
-![Tests](https://img.shields.io/badge/tests-110%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-183%20passing-brightgreen.svg)
 
 **English** → [README.en.md](./README.en.md)
 
@@ -23,7 +23,7 @@ Bennira 是一个探索中的本地代码 Agent。它的**产品体验对齐 Cod
 - 🗣️ **交互式 REPL** —— 裸敲 `bennira` 进入持久会话，连续对话、上下文累积、跨会话历史持久化。
 - 🌊 **真流式输出** —— 原生 `fetch` 直连 OpenAI 兼容协议（如 DeepSeek），SSE 逐 token 冒出。
 - ⛔ **Ctrl+C 中断当前轮** —— 停下正在跑的这一轮回到提示符，不退出进程；「用户中断」与「超时/网络失败」被精确区分。
-- 🤖 **Agentic 能力** —— 读文件、改代码、跑命令，走 ReAct 循环（思考 → 调工具 → 观察 → 再想），最多 12 步收敛到 `finish`。危险动作前先征求确认。
+- 🤖 **Agentic 能力** —— 读文件、改代码、跑命令，走真实 agent 循环（思考 → 调工具 → 观察 → 再想），**模型原生 `tool_calls`**（工具结果以 `role:tool` 消息回喂），最多 12 步收敛到 `finish`。危险动作前先征求确认。
 - ⌨️ **顺手的输入侧** —— slash 命令 Tab 补全、`@文件` 引用（把文件内容作独立上下文块注入）、多行输入（反斜杠续行 `\` + 三引号块 `"""`）。
 - 🎛️ **服务商选择向导** —— `setup` 里选一家（DeepSeek / OpenAI / Kimi / 通义 / 智谱 / Ollama / 自定义），自动带出 baseURL；模型可**从内置目录直接选**（不依赖 key、不联网），填了 key 再用真实 `/v1/models` 列表**叠加校准**。
 - 🔑 **多 key 管理** —— 一人多把 key（个人号 / 工作号 / 不同服务商）随时切换：`bennira key list | add | use | remove`，脱敏展示、只存本地。旧单 key 配置**无痛升级**。
@@ -159,7 +159,7 @@ Monorepo，两个包，**决策与执行边界干净劈开**：
 - **`@bennira/core`** —— 纯逻辑内核（**决策侧 + 可测纯函数**）：模型 provider（`generate` / `generateStream`，带外部中断信号）、agent 协议（`buildAgentMessages` / `parseAgentAction`）、配置分层、凭证隔离、主题系统、事件日志、REPL 输入侧纯逻辑（补全 / 多行 / @引用）、零依赖交互组件（方向键菜单）。**零依赖、可离线单测。**
 - **`@bennira/cli`** —— 命令行外壳（**执行侧 + 交互**）：REPL、setup 向导、命令路由、`executeTool`（真正的 fs 读写 / 命令执行）与确认交互。唯一依赖 `@bennira/core`。
 
-**核心闭环**：模型在 core 里吐出 `{thought, action, args}` 的 JSON（决策）→ cli 的 `parseAgentAction` + `executeTool` 落地执行（fs / exec）→ 观察结果 `history.push` 回喂 → 再次进入模型，循环至 `finish`（`MAX_STEPS=12`）。这条 history 回喂就是 agentic 的本质。
+**核心闭环**：模型走 provider 原生 `tool_calls` 请求工具（决策）→ cli 的 `executeTool` 落地执行（fs / exec）→ 观察结果以 `role:tool` 消息 `history.push` 回喂 → 再次进入模型，循环至 `finish`（`MAX_STEPS=12`）。这条 history 回喂就是 agentic 的本质。（无原生 tool_calls 的模型自动回退到 JSON `{thought, action, args}` 协议。）
 
 详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
@@ -186,11 +186,12 @@ Bennira/
 │   │   │   ├── spinner.mjs       零依赖加载动画
 │   │   │   ├── handoff.mjs       生成 docs/HANDOFF.md
 │   │   │   └── index.mjs         统一导出面
-│   │   └── test/                 14 个测试文件，143 用例
+│   │   └── test/                 15 个测试文件，173 用例
 │   └── cli/
-│       └── src/
-│           ├── index.mjs         子命令路由 + setup 向导
-│           └── repl.mjs          交互式 REPL + executeTool
+│       ├── src/
+│       │   ├── index.mjs         子命令路由 + setup 向导
+│       │   └── repl.mjs          交互式 REPL + executeTool（原生 tool_calls 回喂）
+│       └── test/                 agent-loop.test.mjs（fake-provider 回归网，10 用例）
 └── docs/                     产品定义 / 架构 / 路线图等
 ```
 
@@ -203,7 +204,7 @@ npm test              # 运行全部单测（node:test，零依赖，无需 API 
 npm run test:smoke    # 无 key 冒烟测试：验证只读命令能启动
 ```
 
-**当前测试规模：143 用例全绿**，全部离线、不需要真实 key——测的是纯逻辑（配置合并、凭证优先级、多 key CRUD / 向后兼容、plan 解析、主题降级 / 背景探测 / 职业锁定、内置模型目录 / 合并 / 拉取解析、gitignore 保护、方向键解码、服务商预设、中断语义、slash 补全 / 历史、@引用与多行输入）。CI 在无 key 环境下也能全绿。
+**当前测试规模：183 用例全绿**（core 173 + cli 10），全部离线、不需要真实 key——测的是纯逻辑（配置合并、凭证优先级、多 key CRUD / 向后兼容、plan 解析、主题降级 / 背景探测 / 职业锁定、内置模型目录 / 合并 / 拉取解析、gitignore 保护、方向键解码、服务商预设、中断语义、slash 补全 / 历史、@引用与多行输入）以及 cli 侧 agent 循环回归（fake-provider 注入，验证原生 tool_calls → `role:tool` 回喂）。CI 在无 key 环境下也能全绿。
 
 > ⚠️ 跑测试请用无参 `node --test`（即 `npm test`）。Node 22 下 `node --test <目录>` 会把目录当模块加载而报错。
 
@@ -224,7 +225,9 @@ npm run test:smoke    # 无 key 冒烟测试：验证只读命令能启动
 | `multi-key.test.mjs` | 多 key CRUD / 激活切换 / 旧结构升级 / 内置目录 / 合并去重 / 脱敏 |
 | `spinner.test.mjs` | 静默降级 |
 | `theme.test.mjs` | 配色降级 / 解析 / CJK 宽度 |
+| `background-detect.test.mjs` | OSC 11 终端背景色查询解析 / 明暗判定 |
 | `setup-support.test.mjs` | 模型列表拉取解析 / 职业锁定 / 背景探测 / 浅色盘 / 菜单禁用项 |
+| `cli/agent-loop.test.mjs` | fake-provider 回归网：agent 循环、原生 `tool_calls` → `role:tool` 回喂、`runAgentTurn` provider 注入 |
 
 ---
 

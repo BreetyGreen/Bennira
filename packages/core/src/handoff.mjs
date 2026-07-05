@@ -16,7 +16,8 @@ export function createHandoff(root, inspectResult, options = {}) {
     ? memory.nextSteps
     : [
         "运行 `bennira status` 查看当前项目记忆。",
-        "运行 `bennira plan \"继续推进小偷 Alpha\"` 生成下一步计划。",
+        "阅读 `docs/ROADMAP.md` 与 `CHANGELOG.md` 的 `[Unreleased]` 段，确认下一步任务。",
+        "运行 `bennira plan \"<你要推进的目标>\"` 生成下一步计划。",
       ];
 
   const lines = [];
@@ -27,7 +28,7 @@ export function createHandoff(root, inspectResult, options = {}) {
   lines.push("## 当前项目状态");
   lines.push("");
   lines.push(`- 项目根目录：${root}`);
-  lines.push(`- 当前阶段：${memory?.stage ?? "小偷 Alpha"}`);
+  lines.push(`- 当前阶段：${memory?.stage ?? "小偷 Alpha 已完成，向 MVP 推进（真 agent，可执行、可改代码、原生 tool_calls）"}`);
   lines.push(`- 版本线：${memory?.versionLine ?? "Bennira 一代 - 小偷"}`);
   lines.push(`- Git 仓库：${inspectResult.isGitRepo ? "是" : "否"}`);
   lines.push(`- 项目类型：${inspectResult.packageKind}`);
@@ -48,9 +49,10 @@ export function createHandoff(root, inspectResult, options = {}) {
   lines.push("");
   lines.push("## 当前未完成事项");
   lines.push("");
-  lines.push("- Context Reader 需要继续 provider 化。");
-  lines.push("- 需要补最小测试或验证脚本。");
-  lines.push("- TypeScript 编译链暂未引入，当前仍是零依赖 Node ESM。");
+  lines.push("> 未完成事项以滚动文档为准，不在此写死，避免过时。请按以下顺序核对：");
+  lines.push("- `docs/ROADMAP.md`：里程碑与阶段进度。");
+  lines.push("- `CHANGELOG.md` 的 `[Unreleased]` 段：尚未发布、正在进行的改动。");
+  lines.push("- `bennira status` 输出的项目记忆 `nextSteps`。");
   lines.push("");
   lines.push("## 下一步建议");
   lines.push("");
@@ -69,10 +71,11 @@ export function createHandoff(root, inspectResult, options = {}) {
   lines.push("## 给其他 AI 工具的接续提示词");
   lines.push("");
   lines.push("```text");
-  lines.push("这是 Bennira 项目。请先阅读 README.md、AGENTS.md 和 docs/HANDOFF.md。");
-  lines.push("当前目标是继续推进 `Bennira 一代 - 小偷 Alpha`。");
-  lines.push("请遵守：中文优先；先观察再行动；所有关键步骤都要写入事件日志或交接文档；不要执行 shell、不修改业务代码、不做 patch，除非用户明确进入 MVP 阶段。");
-  lines.push("如果需要恢复上下文，请读取 `.bennira/state.json`、`.bennira/logs/events.jsonl` 和 `.bennira/last-plan.md`。");
+  lines.push("这是 Bennira 项目：一个用 Node ESM 编写、零运行时依赖的中文 AI 编码 CLI（真 agent，非只读工具）。");
+  lines.push("请先阅读 README.md、AGENTS.md、docs/HANDOFF.md，再看 docs/ROADMAP.md 与 CHANGELOG.md 的 [Unreleased] 段确认下一步。");
+  lines.push("现状能力：真实 agent 循环，可执行 shell、可读写/修改业务代码、支持模型原生 tool_calls（role:tool 回喂观察）。");
+  lines.push("工作约定：中文优先；先观察再动手；关键步骤写入事件日志或交接文档；改完代码务必跑 `node --test` 保持测试全绿；提交与推送用远程分支 master。");
+  lines.push("恢复上下文（若本机有这些文件，注意它们不进 git、换机会丢）：`.bennira/state.json`、`.bennira/logs/events.jsonl`、`.bennira/last-plan.md`；换机后以 git 内的 docs/ 与 README/AGENTS 为准。");
   lines.push("```");
   lines.push("");
 
