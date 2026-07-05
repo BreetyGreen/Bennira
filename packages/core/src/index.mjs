@@ -38,6 +38,8 @@ export {
   GLYPHS,
   DEFAULT_THEME_ID,
   supportsColor,
+  colorDepth,
+  rgbToAnsi256,
   detectBackground,
   parseOsc11Response,
   queryTerminalBackground,

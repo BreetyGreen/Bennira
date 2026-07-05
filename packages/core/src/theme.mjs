@@ -22,14 +22,35 @@
 
 const RESET = "\u001b[0m";
 
-function fg(hex) {
+// 前景色。depth="truecolor" 用 24-bit（38;2;r;g;b）；"ansi256" 降级为 256 色
+// （38;5;n）——macOS Terminal.app 等不支持真彩色的终端只认这个，否则整串色码被吞、
+// 退回默认白字。这是「白底/深底都看不到紫」的真正根因所在。
+function fg(hex, depth = "truecolor") {
   const { r, g, b } = hexToRgb(hex);
+  if (depth === "ansi256") return `\u001b[38;5;${rgbToAnsi256(r, g, b)}m`;
   return `\u001b[38;2;${r};${g};${b}m`;
 }
 
-function bg(hex) {
+function bg(hex, depth = "truecolor") {
   const { r, g, b } = hexToRgb(hex);
+  if (depth === "ansi256") return `\u001b[48;5;${rgbToAnsi256(r, g, b)}m`;
   return `\u001b[48;2;${r};${g};${b}m`;
+}
+
+// 24-bit RGB → xterm-256 索引。标准算法：纯灰走 232-255 灰阶，其余量化到
+// 16-231 的 6×6×6 立方。让真彩色降级后仍尽量贴近原色（紫仍是紫）。
+export function rgbToAnsi256(r, g, b) {
+  if (r === g && g === b) {
+    if (r < 8) return 16;
+    if (r > 248) return 231;
+    return Math.round(((r - 8) / 247) * 24) + 232;
+  }
+  return (
+    16 +
+    36 * Math.round((r / 255) * 5) +
+    6 * Math.round((g / 255) * 5) +
+    Math.round((b / 255) * 5)
+  );
 }
 
 function hexToRgb(hex) {
@@ -303,6 +324,45 @@ export function supportsColor(env = process.env, stream = process.stdout) {
   return Boolean(stream && stream.isTTY);
 }
 
+// 终端色彩深度探测：返回 "truecolor" | "ansi256"。
+//
+// 为什么必需：bennira 用 24-bit 真彩色（38;2;r;g;b）。但 macOS Terminal.app
+// 至今不支持真彩色，会把整串色码「静默忽略」→ 退回默认前景（白）→ 紫/紫底块全丢，
+// 这正是白底/深底都看不到主题色、选中项无高亮的根因。故不支持真彩色时降级到
+// 256 色（38;5;n），Terminal.app 能正确渲染。
+//
+// 判定（宽松，宁可当真彩色也不错杀现代终端）：
+//   - COLORTERM=truecolor/24bit                         → truecolor
+//   - TERM_PROGRAM ∈ {iTerm.app, vscode, WezTerm, ...}  → truecolor
+//   - TERM 含 "truecolor" / "24bit"                     → truecolor
+//   - TERM_PROGRAM=Apple_Terminal                        → ansi256（关键：Terminal.app）
+//   - TERM 含 "256color" 且非上述真彩色终端              → ansi256
+//   - 无任何信号                                          → truecolor（保持旧行为，空 env 测试不破）
+const TRUECOLOR_TERM_PROGRAMS = new Set(["iTerm.app", "vscode", "WezTerm", "Hyper", "rio"]);
+
+export function colorDepth(env = process.env) {
+  const colorterm = String(env.COLORTERM || "").toLowerCase();
+  if (colorterm === "truecolor" || colorterm === "24bit") return "truecolor";
+
+  const program = env.TERM_PROGRAM || "";
+  if (TRUECOLOR_TERM_PROGRAMS.has(program)) return "truecolor";
+
+  const term = String(env.TERM || "").toLowerCase();
+  if (term.includes("truecolor") || term.includes("24bit") || term.includes("direct")) {
+    return "truecolor";
+  }
+
+  // macOS Terminal.app：显式设 TERM_PROGRAM=Apple_Terminal，仅 256 色。
+  if (program === "Apple_Terminal") return "ansi256";
+
+  // kitty / alacritty 等即便只报 256color 也支持真彩色，但没有可靠信号时保守起见：
+  // 只有明确 256color 且没有真彩色线索 → 降级 256。
+  if (term.includes("256color")) return "ansi256";
+
+  // 无任何信号：维持旧行为（真彩色），避免破坏现有测试与管道快照。
+  return "truecolor";
+}
+
 // 终端背景明暗探测 -----------------------------------------------------------
 //
 // 大多数终端会设 COLORFGBG 环境变量，格式 "fg;bg"（如 "15;0" 白字黑底、
@@ -485,6 +545,13 @@ export function resolveThemeSpec(config = {}, options = {}) {
 export function createTheme(config = {}, options = {}) {
   const enabled = options.enabled ?? supportsColor(options.env, options.stream);
 
+  // 色彩深度：显式 options.depth 优先（测试可锁定）；否则按环境探测。
+  // 不支持真彩色的终端（Terminal.app）降级到 256 色，否则色码被吞、退回白字。
+  const depth =
+    options.depth === "truecolor" || options.depth === "ansi256"
+      ? options.depth
+      : colorDepth(options.env || process.env);
+
   // 背景明暗：显式 options.background 优先；否则在启用颜色时自动探测 COLORFGBG；
   // 探测不到 → 深色（与旧版一致）。降级为纯文本时明暗无意义，不探测。
   let background = options.background;
@@ -499,7 +566,7 @@ export function createTheme(config = {}, options = {}) {
     return (text) => {
       const str = String(text);
       if (!enabled) return str;
-      const prefix = `${bold ? BOLD : ""}${dim ? DIM : ""}${fg(hex)}`;
+      const prefix = `${bold ? BOLD : ""}${dim ? DIM : ""}${fg(hex, depth)}`;
       return `${prefix}${str}${RESET}`;
     };
   };
@@ -511,7 +578,7 @@ export function createTheme(config = {}, options = {}) {
     return (text) => {
       const str = String(text);
       if (!enabled) return `▶ ${str}`;
-      return `${BOLD}${bg(bgHex)}${fg(fgHex)} ${str} ${RESET}`;
+      return `${BOLD}${bg(bgHex, depth)}${fg(fgHex, depth)} ${str} ${RESET}`;
     };
   };
 
@@ -519,6 +586,7 @@ export function createTheme(config = {}, options = {}) {
 
   return {
     enabled,
+    depth,
     id: spec.id,
     job: spec.job,
     character: spec.character,
