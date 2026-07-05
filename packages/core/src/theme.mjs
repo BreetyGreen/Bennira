@@ -65,10 +65,12 @@ export const JOB_THEMES = {
     sigil: "✧",
     unlocked: true,
     // 深色终端盘：value/heading 偏亮，在黑底上跳出来。
+    // 紫调校准自缇利翁的招牌紫围巾——暖调皇家紫罗兰（色相 ~276°），
+    // 比早期偏蓝的通用薰衣草 #9B6BD8 更贴立绘观感、更"夜行盗贼"。
     colors: {
-      brand: "#9B6BD8", // 盗贼紫
-      accent: "#C39BF0",
-      heading: "#B98CE8",
+      brand: "#9450C9", // 缇利翁皇家紫（围巾色，暖调紫罗兰）
+      accent: "#C79BEE", // 亮紫，命令名 / 高亮
+      heading: "#A96FDD", // 次级标题紫
       label: "#8A7CA8",
       value: "#E6E1F0",
       muted: "#6E6285",
@@ -77,12 +79,12 @@ export const JOB_THEMES = {
       danger: "#E07B7B",
       info: "#8FB8E8",
     },
-    // 浅色终端盘：同一套盗贼紫的「深色版」，在白底上对比足够。
+    // 浅色终端盘：同一套缇利翁皇家紫的「深色版」，在白底上对比足够。
     // 关键点：value/heading/accent 全部压深，muted 用中灰，避免白底一片灰看不清。
     colorsLight: {
-      brand: "#6D3AB0", // 更深的盗贼紫，白底醒目
-      accent: "#7A3FC0",
-      heading: "#5E2E9E",
+      brand: "#6A2CAE", // 更深的皇家紫罗兰，白底醒目
+      accent: "#7A34C0",
+      heading: "#5A249A",
       label: "#5A4A78",
       value: "#241C33", // 近黑带紫，正文主色
       muted: "#7A6E92", // 中灰紫，白底可辨
@@ -423,7 +425,7 @@ export function queryTerminalBackground(options = {}) {
 // 决定用深色盘还是浅色盘。优先级：
 //   config.theme.appearance（用户手动锁定）> options.background（OSC11/COLORFGBG 实测）> 深色兜底。
 // 手动值最强：即便探测说深色，用户显式设 light 也照切（透明终端 / 探测误判时的逃生口）。
-// 无任何信号 → 深色，保证 resolveThemeSpec({}) 恒为深色盘（brand #9b6bd8），不破坏既有契约。
+// 无任何信号 → 深色，保证 resolveThemeSpec({}) 恒为深色盘（brand #9450C9），不破坏既有契约。
 function resolveAppearance(themeConfig, options) {
   const pref = themeConfig && themeConfig.appearance;
   if (pref === "light" || pref === "dark") return pref;

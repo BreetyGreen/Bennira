@@ -37,11 +37,11 @@ test("FORCE_COLOR 时启用上色，输出含 ANSI", () => {
   assert.ok(t.brand("x").includes(ESC));
 });
 
-test("默认主题是盗贼（thief），标志色为盗贼紫", () => {
+test("默认主题是盗贼（thief），标志色为缇利翁皇家紫", () => {
   const spec = core.resolveThemeSpec({});
   assert.equal(spec.id, "thief");
   assert.equal(spec.job, "盗贼");
-  assert.equal(spec.colors.brand.toLowerCase(), "#9b6bd8");
+  assert.equal(spec.colors.brand.toLowerCase(), "#9450c9");
 });
 
 test("切换到剑士（warrior）主题", () => {
@@ -56,7 +56,7 @@ test("token 覆盖生效（overrides 覆盖预设色）", () => {
   });
   assert.equal(spec.colors.accent.toLowerCase(), "#ff00ff");
   // 未覆盖的 token 仍是预设值
-  assert.equal(spec.colors.brand.toLowerCase(), "#9b6bd8");
+  assert.equal(spec.colors.brand.toLowerCase(), "#9450c9");
 });
 
 test("未知主题 id 回退到默认盗贼", () => {
