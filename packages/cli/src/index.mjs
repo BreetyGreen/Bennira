@@ -20,7 +20,15 @@ import {
   isSecretsIgnored,
   ensureSecretsIgnored,
   JOB_THEMES,
-  listThemes,
+  isThemeUnlocked,
+  listModels,
+  builtinModels,
+  mergeModelLists,
+  maskKey,
+  addModelKey,
+  listModelKeys,
+  useModelKey,
+  removeModelKey,
   modelReadiness,
   padDisplay,
   parsePlanResponse,
@@ -83,6 +91,8 @@ async function run(name, args) {
       return handoff(args);
     case "theme":
       return theme(args);
+    case "key":
+      return keyCommand(args);
     case "help":
     case "--help":
     case "-h":
@@ -118,10 +128,12 @@ async function setup(args) {
   }
   console.log("");
 
-  // 染色配件：菜单指针 / 高亮项 / 灰字 / 标题，全部走主题 token。
+  // 染色配件：菜单指针 / 高亮项 / 普通项 / 灰字 / 标题，全部走主题 token。
+  // item（未选中项）用 value 色渲染，避免白底一片灰、黑底看不见。
   const menuPaint = {
     pointer: (s) => t.accent(s),
     active: (s) => t.accent(s),
+    item: (s) => t.value(s),
     dim: (s) => t.muted(s),
     heading: (s) => t.value(s),
   };
@@ -178,24 +190,11 @@ async function setup(args) {
   const opt = { scope };
   console.log("");
 
-  // 1) 主题 / 版本线
-  console.log(t.heading("② 配色主题"));
-  const themeItems = listThemes(readConfig(root))
-    .filter((i) => i.kind === "preset")
-    .map((i) => ({ value: i.id, label: i.id, hint: i.character ? `（${i.character}）` : "" }));
-  const themeId = await choose(
-    "选择职业配色",
-    themeItems,
-    readConfig(root).theme?.active || "thief"
-  );
-  if (JOB_THEMES[themeId]) {
-    updateThemeConfig(root, { active: themeId }, opt);
-  }
-  console.log("");
-
-  // 2) 模型接入 —— 先选服务商（自动带出 baseURL/模型名），再确认/微调
-  console.log(t.heading("③ 模型接入"));
-  console.log(t.muted("  选一家服务商即可，网址和默认模型会自动带出；只有自定义才需手填。"));
+  // 1) 模型接入 —— 先选服务商（自动带出 baseURL），填 key，再拉模型列表选一个
+  //    配色主题不在此处问：那是纯审美偏好，不该占用 onboarding。
+  //    默认盗贼紫，想换事后用 `bennira theme use <id>`。
+  console.log(t.heading("② 模型接入"));
+  console.log(t.muted("  选一家服务商即可，网址会自动带出；模型可从内置目录直接选，填了 key 还会用真实列表校准。"));
 
   // 已有配置时，默认高亮匹配的预设；匹配不到就落到 custom。
   const existingBaseURL = readConfig(root).model?.baseURL || "";
@@ -213,26 +212,26 @@ async function setup(args) {
   );
   const preset = findProviderPreset(providerId) || findProviderPreset("custom");
 
-  // 预设带出默认值：选了具体服务商，baseURL/模型名默认就填好，用户回车即用、想改也能改；
-  // 选 custom 则默认值回到"空 / gpt-4o-mini"，走原来的手填。
+  // 预设带出默认值：选了具体服务商，baseURL 默认就填好，用户回车即用、想改也能改；
+  // 选 custom 则默认值回到"空"，走原来的手填。
   const baseURLDefault = preset.baseURL || existingBaseURL || "";
-  const modelDefault = preset.model || readConfig(root).model?.model || "gpt-4o-mini";
+  const modelFallback = preset.model || readConfig(root).model?.model || "gpt-4o-mini";
 
   if (preset.id === "custom") {
     console.log(t.muted("  例：https://api.openai.com/v1 或本地 http://localhost:11434/v1"));
   } else {
-    console.log(t.muted(`  已选 ${preset.label}：直接回车即用下面带出的默认值，想改也可以。`));
+    console.log(t.muted(`  已选 ${preset.label}：直接回车即用下面带出的默认网址，想改也可以。`));
   }
   const baseURL = await askText("模型 baseURL", baseURLDefault);
-  const model = await askText("模型名称", modelDefault);
-  updateModelConfig(root, { baseURL, model }, opt);
 
-  console.log(t.muted("  API key 只写入 secrets.json（已 gitignore），不进 config、不上传。"));
-  const apiKey = await askText("API key（留空则稍后用环境变量 BENNIRA_API_KEY）", "");
+  // —— key 现在是「可选增强」，不再是选模型的前提 ——
+  // 模型已能从内置目录直接选（策略一）；填了 key 只是额外用真实列表校准（策略二），
+  // 并把这把 key 存进多 key 库（带 provider 标签，后续可 bennira key 管理/切换）。
+  console.log(t.muted("  API key 只写入 secrets.json（已 gitignore），不进 config、不上传。可留空，稍后用 bennira key add 再加。"));
+  const apiKey = await askText("API key（留空则稍后用环境变量 BENNIRA_API_KEY 或 bennira key add）", "");
   if (apiKey) {
-    const path = saveModelApiKey(root, apiKey, opt);
+    const path = saveModelApiKey(root, apiKey, { ...opt, label: preset.label, provider: preset.id });
     console.log(`  ${t.success(g.found)} ${t.muted(`已安全写入 ${path}`)}`);
-    // 全局 secrets 在 ~，不受项目 .gitignore 约束；仅项目层需要保护。
     if (scope === SCOPES.PROJECT) {
       const { changed } = ensureSecretsIgnored(root);
       if (changed) {
@@ -242,10 +241,25 @@ async function setup(args) {
       }
     }
   }
+
+  // 拉模型列表让用户选。内置目录不依赖 key 立即可选；填了 key 再叠加实时拉取。
+  const model = await pickModel({
+    providerId: preset.id,
+    baseURL,
+    apiKey,
+    fallback: modelFallback,
+    interactive,
+    t,
+    g,
+    menuPaint,
+    askText,
+  });
+
+  updateModelConfig(root, { baseURL, model }, opt);
   console.log("");
 
-  // 3) 网络权限门
-  console.log(t.heading("④ 网络权限"));
+  // 2) 网络权限门
+  console.log(t.heading("③ 网络权限"));
   console.log(t.muted("  盗贼默认谨慎（deny）。调云端模型需要联网。"));
   const netVal = await choose(
     "允许联网调用模型？",
@@ -284,6 +298,46 @@ async function setup(args) {
   } else {
     console.log(`${nt.warning(nt.glyphs.warn || "!")} ${nt.muted("模型尚未完全就绪。补齐 baseURL / 模型名 / key 并允许联网后，init/plan 才能运行。")}`);
   }
+}
+
+// setup 里选模型：内置目录立即可选（策略一），填了 key 再叠加实时拉取（策略二）。
+// -----------------------------------------------------------------------------
+// 这是对齐 openclaw「初始化就能选」体验的落点。分层兜底，永远给得出选项：
+//   1. 先拿服务商的「内置模型目录」（builtinModels）—— 不依赖 key、不联网，立刻有菜单。
+//   2. 若已填 key 且可交互 → 调 listModels 实时拉取，用 mergeModelLists 叠加校准
+//      （内置在前、实时补后、去重）。拉取失败静默保留内置目录，不打断。
+//   3. 合并后有列表 + 交互终端 → selectMenu 选（默认高亮 fallback 若在列）。
+//   4. 合并后仍为空（custom 无目录、又没拉到）→ 才退回 askText 手填。
+async function pickModel({ providerId, baseURL, apiKey, fallback, interactive, t, g, menuPaint, askText }) {
+  // 策略一：内置目录——选完服务商这一刻就能给（零 key、零网络）。
+  let models = builtinModels(providerId);
+
+  // 策略二：有 key 且能交互时，实时拉取叠加校准。失败不影响内置目录。
+  if (apiKey && interactive && baseURL) {
+    console.log(t.muted(`  ${g.arrow} 已填 key，正在用真实模型列表校准…`));
+    const res = await listModels(baseURL, apiKey, { timeoutMs: 8000 });
+    if (res.ok) {
+      const before = models.length;
+      models = mergeModelLists(models, res.models);
+      console.log(`  ${t.success(g.found)} ${t.muted(`实时拉到 ${res.models.length} 个，合并后共 ${models.length} 个可选。`)}`);
+      void before;
+    } else if (models.length > 0) {
+      console.log(`  ${t.muted(`${g.bullet} 实时拉取未成功（${res.error}），先用内置目录，可稍后 bennira setup 重试。`)}`);
+    } else {
+      // 内置目录也为空（custom）+ 拉取失败 → 讲清原因，落到手填。
+      console.log(`  ${t.warning(g.warn || "!")} ${t.muted(`无法拉取模型列表（${res.error}），改为手动输入。`)}`);
+    }
+  }
+
+  // 非交互（管道/脚本）或无任何可选项 → 手填/默认。
+  if (!interactive || models.length === 0) {
+    return askText("模型名称", fallback);
+  }
+
+  const items = models.map((id) => ({ value: id, label: id }));
+  const def = models.includes(fallback) ? fallback : models[0];
+  console.log(t.muted(`  用 ↑/↓ 选择模型（共 ${models.length} 个，回车确认）。`));
+  return selectMenu("选择模型", items, { def, paint: menuPaint });
 }
 
 function inspect(args) {
@@ -541,9 +595,21 @@ function theme(args) {
         return;
       }
       const config = readConfig(root);
-      const known = Boolean(JOB_THEMES[id] || (config.theme?.custom && config.theme.custom[id]));
+      const isCustom = Boolean(config.theme?.custom && config.theme.custom[id]);
+      const known = Boolean(JOB_THEMES[id] || isCustom);
       if (!known) {
         console.error(`未知主题：${id}。运行 bennira theme list 查看可用主题。`);
+        process.exitCode = 1;
+        return;
+      }
+      // 一代版本线只开放盗贼；其余职业配色虽已写好但锁定，切换时拦下。
+      // 自定义主题不受锁定约束（用户自己造的）。
+      if (!isCustom && !isThemeUnlocked(id)) {
+        const nt = loadTheme(root, args);
+        console.error(
+          `${nt.warning(nt.glyphs.warn || "!")} ${nt.value(`「${id}」职业尚未在本代开放。`)}`
+        );
+        console.error(`  ${nt.muted("一代仅开放盗贼（thief）。其余职业为后续版本预留。")}`);
         process.exitCode = 1;
         return;
       }
@@ -619,6 +685,143 @@ function theme(args) {
   }
 }
 
+// key 子命令：list / add / use <id> / remove <id> —— 多 key 管理 -----------------
+// -----------------------------------------------------------------------------
+// 支持一人多把 key（不同服务商 / 工作号 / 个人号），随时切换激活项。
+// 凭证不留痕原则不变：只写 .bennira/secrets.json（gitignore + chmod 600），脱敏展示。
+// --scope project|global 决定操作哪一层（默认 global，与 setup 默认一致）。
+async function keyCommand(args) {
+  const root = process.cwd();
+  const clean = args.filter((a) => a !== "--no-color");
+  // 解析 --scope
+  let scope = SCOPES.GLOBAL;
+  const scopeIdx = clean.indexOf("--scope");
+  if (scopeIdx >= 0 && clean[scopeIdx + 1]) {
+    scope = clean[scopeIdx + 1] === "project" ? SCOPES.PROJECT : SCOPES.GLOBAL;
+    clean.splice(scopeIdx, 2);
+  }
+  const opt = { scope };
+  const [sub = "list", ...rest] = clean;
+  const t = loadTheme(root, args);
+  const g = t.glyphs;
+  const scopeName = scope === SCOPES.PROJECT ? "项目层" : "全局层";
+
+  switch (sub) {
+    case "list": {
+      const { keys, activeKeyId } = listModelKeys(root, opt);
+      console.log(t.title(`模型 API Key（${scopeName}）`));
+      if (keys.length === 0) {
+        console.log(t.muted("  （空）还没有配置任何 key。用 bennira key add 添加，或跑 bennira setup。"));
+        return;
+      }
+      keys.forEach((k) => {
+        const marker = k.active ? t.success(g.found) : t.muted(" ");
+        const id = k.active ? t.accent(padDisplay(k.id, 10)) : t.value(padDisplay(k.id, 10));
+        const prov = k.provider ? t.muted(`[${k.provider}]`) : t.muted("[通用]");
+        const label = t.label(k.label || "");
+        console.log(`  ${marker} ${id} ${prov} ${label}  ${t.muted(k.masked)}`);
+      });
+      console.log("");
+      console.log(t.muted(`  激活中：${activeKeyId || "(无)"}　切换：bennira key use <id>`));
+      return;
+    }
+    case "add": {
+      // 交互填写；也支持参数：bennira key add <key> [--label x] [--provider y]
+      const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+      const textPaint = { label: (s) => t.value(s), dim: (s) => t.muted(s) };
+      const menuPaint = {
+        pointer: (s) => t.accent(s), active: (s) => t.accent(s),
+        item: (s) => t.value(s), dim: (s) => t.muted(s), heading: (s) => t.value(s),
+      };
+
+      // 参数形态优先：第一个非 -- 参数当作 key。
+      let apiKey = rest.find((a) => !a.startsWith("--")) || "";
+      const argLabel = optValue(rest, "--label");
+      const argProvider = optValue(rest, "--provider");
+
+      let label = argLabel || "";
+      let provider = argProvider || "";
+
+      if (interactive && !apiKey) {
+        // 先选归属服务商（可选，便于日后识别），再填 key 与备注。
+        provider = await selectMenu(
+          "这把 key 属于哪家服务商？",
+          [
+            ...PROVIDER_PRESETS.filter((p) => p.id !== "custom").map((p) => ({ value: p.id, label: p.label })),
+            { value: "", label: "通用 / 其它" },
+          ],
+          { def: provider || "deepseek", paint: menuPaint }
+        );
+        apiKey = await textInput("API key", { def: "", paint: textPaint });
+        label = await textInput("备注名（便于区分，可留空）", { def: label || (provider ? findProviderPreset(provider)?.label : "") || "", paint: textPaint });
+      }
+
+      if (!apiKey) {
+        console.error(`${t.warning(g.warn || "!")} ${t.value("未提供 key。用法：bennira key add <key> [--label 备注] [--provider deepseek] [--scope project]")}`);
+        process.exitCode = 1;
+        return;
+      }
+
+      const { id, path } = addModelKey(root, { apiKey, label, provider: provider || null }, opt);
+      if (scope === SCOPES.PROJECT) ensureSecretsIgnored(root);
+      appendEvent(root, {
+        type: "key", summary: `新增模型 key（${scopeName}）：${label || id}`,
+        files: [".bennira/secrets.json"], result: "success", tool: "bennira key add", risk: "low",
+      });
+      console.log(`${t.success(g.found)} ${t.value("已新增并激活 key")} ${t.accent(id)} ${t.muted(`→ ${maskKey(apiKey)}（${path}）`)}`);
+      return;
+    }
+    case "use": {
+      const id = rest.find((a) => !a.startsWith("--"));
+      if (!id) {
+        console.error("请提供 key id，例如：bennira key use key-2（用 bennira key list 查看 id）");
+        process.exitCode = 1;
+        return;
+      }
+      try {
+        useModelKey(root, id, opt);
+        console.log(`${t.success(g.found)} ${t.value("已切换激活 key 为")} ${t.accent(id)}`);
+      } catch (e) {
+        console.error(`${t.warning(g.warn || "!")} ${t.value(e.message)}　用 bennira key list 查看可用 id。`);
+        process.exitCode = 1;
+      }
+      return;
+    }
+    case "remove":
+    case "rm": {
+      const id = rest.find((a) => !a.startsWith("--"));
+      if (!id) {
+        console.error("请提供 key id，例如：bennira key remove key-2");
+        process.exitCode = 1;
+        return;
+      }
+      try {
+        const { activeKeyId } = removeModelKey(root, id, opt);
+        appendEvent(root, {
+          type: "key", summary: `删除模型 key（${scopeName}）：${id}`,
+          files: [".bennira/secrets.json"], result: "success", tool: "bennira key remove", risk: "low",
+        });
+        console.log(`${t.success(g.found)} ${t.value("已删除 key")} ${t.accent(id)}${activeKeyId ? t.muted(`，当前激活：${activeKeyId}`) : t.muted("，已无可用 key")}`);
+      } catch (e) {
+        console.error(`${t.warning(g.warn || "!")} ${t.value(e.message)}`);
+        process.exitCode = 1;
+      }
+      return;
+    }
+    default: {
+      console.error(`未知 key 子命令：${sub}`);
+      console.log(t.muted("可用：list | add [<key> --label 备注 --provider deepseek] | use <id> | remove <id>　（--scope project|global）"));
+      process.exitCode = 1;
+    }
+  }
+}
+
+// 从参数数组里取 --flag 后的值（无则空串）。
+function optValue(args, flag) {
+  const i = args.indexOf(flag);
+  return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : "";
+}
+
 function firstPathArg(args) {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -674,6 +877,7 @@ function help() {
       line("bennira log [path] [--limit 20]", "查看最近事件"),
       line("bennira handoff [path]", "刷新 docs/HANDOFF.md"),
       line("bennira theme [list|show|use|set|reset]", "查看 / 切换 / 自定义配色"),
+      line("bennira key [list|add|use|remove]", "管理多把模型 API key（切换 / 增删）"),
       "",
       t.heading("配色"),
       `  ${t.muted(g.arrow)} ${t.value("一代默认盗贼紫（缇利翁）。八方旅人职业预设可一键切换。")}`,
