@@ -91,6 +91,8 @@ export {
   AGENT_SYSTEM,
   buildAgentMessages,
   parseAgentAction,
+  toolSchemas,
+  actionFromToolCall,
 } from "./agent.mjs";
 export {
   SLASH_COMMANDS,

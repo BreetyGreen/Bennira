@@ -12,18 +12,120 @@
 // 保持可测试、可移植。执行结果由 CLI 作为 role:"user" 的观察喂回，形成闭环。
 
 // 工具清单（模型可调用的动作）。risk 决定 CLI 是否需要用户确认。
+// -----------------------------------------------------------------------------
+// params 是每个工具的入参 JSON Schema（OpenAI function-calling 用）。
+// 它有两个用途：
+//   1. 原生 tool_calls 路径（策略一）：编成 tools:[...] 随请求发出，端点据此
+//      校验模型给的 args，结构化返回——不再靠我们正则去文本里捞 JSON。
+//   2. 文本 JSON 路径（策略二/fallback）：desc 里仍保留人类可读的 args 说明，
+//      不支持 tools 的 provider（本地 Ollama、部分 custom）照旧走 parseAgentAction。
+// 两条路共用同一份 AGENT_TOOLS，语义单一来源，不会漂移。
 export const AGENT_TOOLS = [
-  { name: "read_file", risk: "safe", desc: "读取一个文件的内容。args: { path }" },
-  { name: "list_files", risk: "safe", desc: "列出某目录下的文件。args: { path }（默认项目根）" },
-  { name: "search", risk: "safe", desc: "在项目内按关键字搜索文件内容。args: { query }" },
-  { name: "write_file", risk: "danger", desc: "创建或覆盖一个文件。args: { path, content }" },
-  { name: "run_command", risk: "danger", desc: "在项目根执行一条 shell 命令。args: { command }" },
-  { name: "finish", risk: "safe", desc: "结束本轮，向用户交付最终回答。args: { message }" },
+  {
+    name: "read_file", risk: "safe", desc: "读取一个文件的内容。args: { path }",
+    params: {
+      type: "object",
+      properties: { path: { type: "string", description: "相对项目根的文件路径" } },
+      required: ["path"],
+    },
+  },
+  {
+    name: "list_files", risk: "safe", desc: "列出某目录下的文件。args: { path }（默认项目根）",
+    params: {
+      type: "object",
+      properties: { path: { type: "string", description: "相对项目根的目录路径，缺省为项目根" } },
+      required: [],
+    },
+  },
+  {
+    name: "search", risk: "safe", desc: "在项目内按关键字搜索文件内容。args: { query }",
+    params: {
+      type: "object",
+      properties: { query: { type: "string", description: "要搜索的关键字" } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "write_file", risk: "danger", desc: "创建或覆盖一个文件。args: { path, content }",
+    params: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "相对项目根的文件路径" },
+        content: { type: "string", description: "文件的完整新内容（不是 diff）" },
+      },
+      required: ["path", "content"],
+    },
+  },
+  {
+    name: "run_command", risk: "danger", desc: "在项目根执行一条 shell 命令。args: { command }",
+    params: {
+      type: "object",
+      properties: { command: { type: "string", description: "要执行的 shell 命令" } },
+      required: ["command"],
+    },
+  },
+  {
+    name: "finish", risk: "safe", desc: "结束本轮，向用户交付最终回答。args: { message }",
+    params: {
+      type: "object",
+      properties: { message: { type: "string", description: "给用户看的中文最终回答" } },
+      required: ["message"],
+    },
+  },
 ];
 
 export const AGENT_TOOL_RISK = Object.fromEntries(
   AGENT_TOOLS.map((t) => [t.name, t.risk])
 );
+
+// 把 AGENT_TOOLS 编成 OpenAI function-calling 的 tools:[...] 结构。
+// -----------------------------------------------------------------------------
+// 每项形如 { type:"function", function:{ name, description, parameters } }。
+// 这是随 /chat/completions 请求发出的 tools 参数——端点据此让模型返回结构化的
+// tool_calls，而不是我们再去正则解析文本。desc 直接当 description，params 当
+// parameters（缺省给一个空对象 schema，保证永远是合法的 JSON Schema）。
+export function toolSchemas() {
+  return AGENT_TOOLS.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.desc,
+      parameters: t.params || { type: "object", properties: {}, required: [] },
+    },
+  }));
+}
+
+// 把原生 tool_calls[0] 归一成与 parseAgentAction 相同形状的动作对象。
+// -----------------------------------------------------------------------------
+// 端点返回的 message.tool_calls[i] 形如：
+//   { id, type:"function", function:{ name, arguments:"<JSON字符串>" } }
+// 注意 arguments 是 **字符串**（即便内容是 JSON），所以要 JSON.parse。
+// 解析失败时不吞掉——返回 args:{} 但带上 raw，让上层能察觉而不是静默兜底。
+// 返回对象额外带 toolCallId：T3 的 role:"tool" 回喂需要它做配对。
+export function actionFromToolCall(toolCall) {
+  const fn = toolCall?.function || {};
+  const name = typeof fn.name === "string" ? fn.name : "";
+  let args = {};
+  if (typeof fn.arguments === "string" && fn.arguments.trim()) {
+    try {
+      const parsed = JSON.parse(fn.arguments);
+      if (parsed && typeof parsed === "object") args = parsed;
+    } catch {
+      // 结构化通道里 arguments 仍解析失败极罕见——不静默当 finish，
+      // 保留空 args + raw，交由上层决定（通常回喂错误让模型重试）。
+    }
+  } else if (fn.arguments && typeof fn.arguments === "object") {
+    // 个别实现直接给对象而非字符串——一并兼容。
+    args = fn.arguments;
+  }
+  return {
+    thought: "",
+    action: name,
+    args,
+    toolCallId: typeof toolCall?.id === "string" ? toolCall.id : undefined,
+    raw: toolCall,
+  };
+}
 
 const TOOL_LINES = AGENT_TOOLS.map((t) => `- ${t.name}（${t.risk}）：${t.desc}`).join("\n");
 

@@ -286,6 +286,74 @@ class OpenAICompatibleProvider {
     return text.trim();
   }
 
+  // 带工具的非流式生成（原生 function-calling 路径）。
+  // ---------------------------------------------------------------------------
+  // 与 generate 的关键区别：请求体多带 tools:[...]，让端点返回结构化的
+  // message.tool_calls，而不是一段要我们正则解析的文本。
+  //
+  // 返回形状是 **对象** { text, toolCalls, finishReason }，而不是 generate 的
+  // 裸 string——因为调用方（agent loop）既要拿工具调用，也可能拿纯文本收尾。
+  //   - toolCalls：数组，端点直接给的结构化调用（可能为空）。
+  //   - text：message.content（模型的自然语言，可能与 tool_calls 并存或独存）。
+  //   - finishReason：choices[0].finish_reason，"tool_calls" 时表示模型要调工具。
+  //
+  // 不支持 tools 的服务（本地 Ollama / 部分 custom）：多数会忽略 tools 参数、
+  // 照常只回 content——此时 toolCalls 为空，上层据此回退到 parseAgentAction。
+  // 少数会直接 4xx 报错——由上层 catch 后同样回退。所以这条路对旧 provider 是
+  // 「优先尝试、失败即退」，不破坏可用性。
+  async generateWithTools(messages, tools, { signal: externalSignal, toolChoice = "auto" } = {}) {
+    const link = linkAbort(externalSignal, this.timeoutMs);
+    let response;
+    try {
+      const body = {
+        model: this.model,
+        messages,
+        temperature: this.temperature,
+        max_tokens: this.maxTokens,
+      };
+      // 只在真有工具时才带 tools/tool_choice——空数组会被某些端点判为非法。
+      if (Array.isArray(tools) && tools.length > 0) {
+        body.tools = tools;
+        body.tool_choice = toolChoice;
+      }
+      response = await fetch(this.endpoint(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: link.signal,
+      });
+    } catch (error) {
+      if (link.signal.aborted) {
+        throw classifyAbort(link.signal.reason, this.timeoutMs);
+      }
+      throw new ModelRequestError(`无法连接模型服务：${error?.message || error}`);
+    } finally {
+      link.cleanup();
+    }
+
+    if (!response.ok) {
+      const body = await safeText(response);
+      throw new ModelRequestError(
+        `模型返回 ${response.status}：${body.slice(0, 300)}`,
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json().catch(() => null);
+    const message = data?.choices?.[0]?.message || {};
+    const finishReason = data?.choices?.[0]?.finish_reason;
+    const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+    const text = typeof message.content === "string" ? message.content : "";
+    // 既无工具调用、又无文本——才算真正的空响应（异常）。
+    if (toolCalls.length === 0 && !text.trim()) {
+      throw new ModelRequestError("模型返回内容为空或格式异常。");
+    }
+    return { text: text.trim(), toolCalls, finishReason, raw: message };
+  }
+
   // 流式生成：走 OpenAI 兼容 SSE（stream:true），逐 token 回调 onToken(delta)。
   // 返回拼接后的完整文本。onToken 只在拿到内容增量时触发——上层据此实现
   // "首个 token 到达即停 spinner、逐字打印"的活感。

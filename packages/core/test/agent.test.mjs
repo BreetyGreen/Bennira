@@ -5,6 +5,8 @@ import {
   buildAgentMessages,
   AGENT_TOOL_RISK,
   AGENT_TOOLS,
+  toolSchemas,
+  actionFromToolCall,
 } from "../src/agent.mjs";
 
 test("parseAgentAction: 解析标准 JSON 动作", () => {
@@ -70,4 +72,69 @@ test("buildAgentMessages: system 含快照，历史原样接在后面", () => {
   assert.ok(msgs[0].content.includes("write_file")); // 工具清单进了 system
   assert.equal(msgs[1].content, "帮我看看");
   assert.equal(msgs.length, 3);
+});
+
+// --- T2：原生 tool_calls 支撑函数 ---------------------------------------------
+
+test("toolSchemas: 每项是合法的 OpenAI function schema，且覆盖全部工具", () => {
+  const schemas = toolSchemas();
+  assert.equal(schemas.length, AGENT_TOOLS.length);
+  const names = new Set();
+  for (const s of schemas) {
+    assert.equal(s.type, "function");
+    assert.equal(typeof s.function.name, "string");
+    assert.ok(s.function.description.length > 0);
+    // parameters 必须是 object 类型的 JSON Schema
+    assert.equal(s.function.parameters.type, "object");
+    assert.equal(typeof s.function.parameters.properties, "object");
+    assert.ok(Array.isArray(s.function.parameters.required));
+    names.add(s.function.name);
+  }
+  // 关键工具都在，名字与 AGENT_TOOLS 一一对应
+  for (const t of AGENT_TOOLS) assert.ok(names.has(t.name), `缺少 ${t.name}`);
+});
+
+test("toolSchemas: write_file 要求 path 与 content 两个必填参数", () => {
+  const wf = toolSchemas().find((s) => s.function.name === "write_file");
+  assert.deepEqual(wf.function.parameters.required.sort(), ["content", "path"]);
+  assert.equal(wf.function.parameters.properties.path.type, "string");
+  assert.equal(wf.function.parameters.properties.content.type, "string");
+});
+
+test("actionFromToolCall: 解析标准 tool_call（arguments 是 JSON 字符串）", () => {
+  const out = actionFromToolCall({
+    id: "call_abc",
+    type: "function",
+    function: { name: "read_file", arguments: '{"path":"README.md"}' },
+  });
+  assert.equal(out.action, "read_file");
+  assert.equal(out.args.path, "README.md");
+  assert.equal(out.toolCallId, "call_abc"); // T3 回喂配对要用
+});
+
+test("actionFromToolCall: arguments 为空串归一为空 args（不报错）", () => {
+  const out = actionFromToolCall({
+    id: "call_x",
+    function: { name: "list_files", arguments: "" },
+  });
+  assert.equal(out.action, "list_files");
+  assert.deepEqual(out.args, {});
+});
+
+test("actionFromToolCall: arguments 是坏 JSON 时不静默当 finish（保留空 args + raw）", () => {
+  const bad = { id: "call_y", function: { name: "write_file", arguments: "{不是合法json" } };
+  const out = actionFromToolCall(bad);
+  // 关键：action 仍是模型意图的 write_file，不被吞成 finish
+  assert.equal(out.action, "write_file");
+  assert.deepEqual(out.args, {});
+  assert.equal(out.raw, bad); // 上层可据 raw 察觉异常并回喂重试
+});
+
+test("actionFromToolCall: 兼容 arguments 直接是对象的实现", () => {
+  const out = actionFromToolCall({
+    id: "call_z",
+    function: { name: "search", arguments: { query: "TODO" } },
+  });
+  assert.equal(out.action, "search");
+  assert.equal(out.args.query, "TODO");
 });

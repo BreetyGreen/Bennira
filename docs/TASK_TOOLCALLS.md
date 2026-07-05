@@ -37,12 +37,22 @@
 
 ### 阶段 1 · 核心改造
 
-- [ ] **T2 · `model.mjs` 加 `tools` + 读 `tool_calls`**
+- [x] **T2 · `model.mjs` 加 `tools` + 读 `tool_calls`** ✅ 2026-07-06
   - `generate` / `generateStream` 请求体加 `tools:[...]`（由 `AGENT_TOOLS` 生成 JSON Schema）。
   - 响应优先读 `choices[0].message.tool_calls`；缺失则回退读 `content`（现有路径）。
   - 新增把 `AGENT_TOOLS` → OpenAI function schema 的转换（`toolSchemas()`）。
   - `parseAgentAction` **保留不删**，作为 fallback。
   - 文件：`packages/core/src/model.mjs`、`packages/core/src/agent.mjs`
+  - **落地（严格「只加不改」，对 repl 透明）**：
+    - `agent.mjs`：每个工具补 `params`（JSON Schema）；新增 `toolSchemas()`（→ OpenAI
+      `tools:[...]`）与 `actionFromToolCall()`（tool_call → 与 parseAgentAction 同形状的动作，
+      带 `toolCallId` 供 T3 回喂配对；**坏 JSON 不静默当 finish**，保留空 args+raw）。
+    - `model.mjs`：**新增并行方法** `generateWithTools(messages, tools, opts)` → `{ text,
+      toolCalls, finishReason }`。老 `generate`/`generateStream` **一字未动**（5 个调用者零影响）。
+      空 tools 不发 `tool_choice`；不支持的 provider 回空 toolCalls，上层据此回退。
+    - `index.mjs`：导出 `toolSchemas` / `actionFromToolCall`。
+    - 新增 6 单测（toolSchemas×2 + actionFromToolCall×4），**179 全绿（173+6）**。切换 loop 去用
+      新方法留给 T3。
 
 - [ ] **T3 · `repl.mjs` loop 改 `role:"tool"` 回喂**
   - 拿到 `tool_calls` 时：assistant 消息带 `tool_calls`，观察以 `role:"tool"` + `tool_call_id` 回喂。
@@ -63,3 +73,6 @@
 - 2026-07-06：清单建立，全部待做，提交入库。后续每完成一项，回来勾选并追加一行。
 - 2026-07-06：**T1 完成**。`packages/cli` 首个测试文件落地，6 用例锚定改造前 loop 契约，173 全绿。
   provider 依赖注入就绪，改 model/repl 的回归网已织好。
+- 2026-07-06：**T2 完成**。core 侧「只加不改」落地原生 tool_calls 能力：`toolSchemas()` /
+  `actionFromToolCall()` / `generateWithTools()`，老方法零改动、对 repl 透明，179 全绿（173+6）。
+  下一步 T3 把 agent loop 切到新方法并改 role:"tool" 回喂。
