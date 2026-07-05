@@ -51,13 +51,20 @@ const DIM = "\u001b[2m";
 // 每套主题给出 9 个语义 token 的十六进制色值，外加一个标志符号 sigil 和中文职业名。
 // 一代只锁定「盗贼」，其余职业先占位预设，未来切换版本线时可直接启用。
 
+// 默认主题 id。提前声明：下方 JOB_THEMES 定义后的「解锁归一化」循环要用到它，
+// 若放在文件末尾会因 TDZ 在模块加载时报 ReferenceError。
+export const DEFAULT_THEME_ID = "thief";
+
 export const JOB_THEMES = {
   // 盗贼 · 缇利翁（Therion）—— 标志紫围巾，夜行独狼
+  // 一代唯一开放（unlocked:true）。其余职业占位、锁定，切换时会被拦下。
   thief: {
     id: "thief",
     job: "盗贼",
     character: "缇利翁",
     sigil: "✧",
+    unlocked: true,
+    // 深色终端盘：value/heading 偏亮，在黑底上跳出来。
     colors: {
       brand: "#9B6BD8", // 盗贼紫
       accent: "#C39BF0",
@@ -69,6 +76,20 @@ export const JOB_THEMES = {
       warning: "#E8C06B",
       danger: "#E07B7B",
       info: "#8FB8E8",
+    },
+    // 浅色终端盘：同一套盗贼紫的「深色版」，在白底上对比足够。
+    // 关键点：value/heading/accent 全部压深，muted 用中灰，避免白底一片灰看不清。
+    colorsLight: {
+      brand: "#6D3AB0", // 更深的盗贼紫，白底醒目
+      accent: "#7A3FC0",
+      heading: "#5E2E9E",
+      label: "#5A4A78",
+      value: "#241C33", // 近黑带紫，正文主色
+      muted: "#7A6E92", // 中灰紫，白底可辨
+      success: "#1F8B4C",
+      warning: "#9A6B00",
+      danger: "#C0392B",
+      info: "#2E6DB4",
     },
   },
   // 剑士 · 欧贝里克（Olberic）—— 钢铁与炽红
@@ -206,6 +227,21 @@ export const JOB_THEMES = {
   },
 };
 
+// 一代版本线只开放盗贼。其余职业配色已写好、但锁定；未显式标 unlocked 的一律视为锁定。
+// 用「定义后归一化」而非逐条硬写，既不动上面的色值，又保证唯一真源。
+for (const [id, theme] of Object.entries(JOB_THEMES)) {
+  if (typeof theme.unlocked !== "boolean") {
+    theme.unlocked = id === DEFAULT_THEME_ID;
+  }
+}
+
+// 某职业是否在本代开放。custom 主题一律视为开放（用户自己造的）。
+export function isThemeUnlocked(id) {
+  const preset = JOB_THEMES[id];
+  if (!preset) return true; // 非预设（自定义）→ 不拦
+  return preset.unlocked === true;
+}
+
 // 语义符号（不吃颜色，纯文本也保留辨识度）--------------------------------------
 
 export const GLYPHS = {
@@ -218,8 +254,6 @@ export const GLYPHS = {
   branchEnd: "└─",
   chevron: "›",
 };
-
-export const DEFAULT_THEME_ID = "thief";
 
 // 按终端显示宽度补齐（CJK 字符占 2 列）。避免中文行右侧错位。
 export function displayWidth(str) {
@@ -261,6 +295,37 @@ export function supportsColor(env = process.env, stream = process.stdout) {
   return Boolean(stream && stream.isTTY);
 }
 
+// 终端背景明暗探测 -----------------------------------------------------------
+//
+// 大多数终端会设 COLORFGBG 环境变量，格式 "fg;bg"（如 "15;0" 白字黑底、
+// "0;15" 黑字白底），末位是背景色索引。索引 0-6、8 视为深色，7、9-15 视为浅色。
+// 探测不到（很多 IDE 集成终端不设）返回 "unknown"，上层按深色兜底 —— 这样
+// 既能自动适配白底终端，又保证探测失败时行为与旧版完全一致，不影响现有测试。
+const DARK_BG_INDEXES = new Set([0, 1, 2, 3, 4, 5, 6, 8]);
+
+export function detectBackground(env = process.env) {
+  const raw = env.COLORFGBG;
+  if (typeof raw === "string" && raw.includes(";")) {
+    const parts = raw.split(";");
+    const bg = Number(parts[parts.length - 1].trim());
+    if (Number.isInteger(bg)) {
+      return DARK_BG_INDEXES.has(bg) ? "dark" : "light";
+    }
+  }
+  return "unknown";
+}
+
+// 决定用深色盘还是浅色盘：显式 background > config.theme.appearance > 默认深色。
+// 只有明确判定为 "light" 才切浅色盘，其余（dark / unknown / auto 未探到）全走深色，
+// 保证 resolveThemeSpec({}) 无参时恒为深色盘（brand #9b6bd8），不破坏既有契约。
+function resolveAppearance(themeConfig, options) {
+  const explicit = options.background;
+  if (explicit === "light" || explicit === "dark") return explicit;
+  const pref = themeConfig && themeConfig.appearance;
+  if (pref === "light" || pref === "dark") return pref;
+  return "dark";
+}
+
 // 主题解析：预设 + config 覆盖 + 用户自定义 -----------------------------------
 //
 // config.theme 形如：
@@ -272,7 +337,7 @@ export function supportsColor(env = process.env, stream = process.stdout) {
 //   }
 // }
 
-export function resolveThemeSpec(config = {}) {
+export function resolveThemeSpec(config = {}, options = {}) {
   const themeConfig = config && typeof config.theme === "object" ? config.theme : {};
   const activeId = themeConfig.active || DEFAULT_THEME_ID;
   const custom = themeConfig.custom && typeof themeConfig.custom === "object" ? themeConfig.custom : {};
@@ -281,12 +346,19 @@ export function resolveThemeSpec(config = {}) {
   const overrides =
     themeConfig.overrides && typeof themeConfig.overrides === "object" ? themeConfig.overrides : {};
 
-  const colors = { ...base.colors, ...overrides };
+  // 明暗盘选择：浅色背景且该主题提供了 colorsLight 才切浅色盘，否则用深色盘。
+  // 无 options（如纯 resolveThemeSpec({})）→ appearance=dark → 恒走 base.colors。
+  const appearance = resolveAppearance(themeConfig, options);
+  const palette =
+    appearance === "light" && base.colorsLight ? base.colorsLight : base.colors;
+
+  const colors = { ...palette, ...overrides };
   return {
     id: base.id || activeId,
     job: base.job || "自定义",
     character: base.character || null,
     sigil: base.sigil || GLYPHS.bullet,
+    appearance,
     colors,
   };
 }
@@ -297,8 +369,17 @@ export function resolveThemeSpec(config = {}) {
 // 不关心底层是否上色。enabled=false 时全部退回原样字符串。
 
 export function createTheme(config = {}, options = {}) {
-  const spec = resolveThemeSpec(config);
   const enabled = options.enabled ?? supportsColor(options.env, options.stream);
+
+  // 背景明暗：显式 options.background 优先；否则在启用颜色时自动探测 COLORFGBG；
+  // 探测不到 → 深色（与旧版一致）。降级为纯文本时明暗无意义，不探测。
+  let background = options.background;
+  if (background !== "light" && background !== "dark") {
+    const detected = enabled ? detectBackground(options.env || process.env) : "unknown";
+    background = detected === "light" ? "light" : undefined; // 只有确切浅色才切，其余交给 resolveAppearance 兜底为 dark
+  }
+
+  const spec = resolveThemeSpec(config, { background });
 
   const paint = (hex, { bold = false, dim = false } = {}) => {
     return (text) => {
@@ -317,6 +398,7 @@ export function createTheme(config = {}, options = {}) {
     job: spec.job,
     character: spec.character,
     sigil: spec.sigil,
+    appearance: spec.appearance,
     glyphs: GLYPHS,
     colors: c,
 
@@ -356,6 +438,7 @@ export function listThemes(config = {}) {
     sigil: theme.sigil,
     brand: theme.colors.brand,
     kind: "preset",
+    unlocked: theme.unlocked === true,
     active: theme.id === activeId,
   }));
 
@@ -366,6 +449,7 @@ export function listThemes(config = {}) {
     sigil: theme.sigil || GLYPHS.bullet,
     brand: (theme.colors && theme.colors.brand) || "#ffffff",
     kind: "custom",
+    unlocked: true,
     active: id === activeId,
   }));
 

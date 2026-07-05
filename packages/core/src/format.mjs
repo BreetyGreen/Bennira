@@ -178,10 +178,17 @@ export function formatThemeList(config, theme) {
   items
     .filter((item) => item.kind === "preset")
     .forEach((item) => {
-      const marker = item.active ? t.success(g.found) : t.muted(" ");
-      const name = item.active ? t.accent(padDisplay(item.id, 12)) : t.value(padDisplay(item.id, 12));
+      const locked = item.unlocked === false;
+      const marker = item.active ? t.success(g.found) : locked ? t.muted("🔒") : t.muted(" ");
+      // 锁定项整行走灰（muted），未锁定项正常上色；避免让人以为锁定的能直接切。
+      const name = item.active
+        ? t.accent(padDisplay(item.id, 12))
+        : locked
+          ? t.muted(padDisplay(item.id, 12))
+          : t.value(padDisplay(item.id, 12));
       const who = item.character ? t.muted(`（${item.character}）`) : "";
-      lines.push(`  ${marker} ${item.sigil} ${name} ${t.label(item.job)}${who}  ${t.muted(item.brand)}`);
+      const tail = locked ? t.muted("  · 后续版本开放") : `  ${t.muted(item.brand)}`;
+      lines.push(`  ${marker} ${item.sigil} ${name} ${locked ? t.muted(item.job) : t.label(item.job)}${who}${tail}`);
     });
 
   const customs = items.filter((item) => item.kind === "custom");

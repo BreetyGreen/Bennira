@@ -57,11 +57,16 @@ export function decodeKey(input) {
   return null;
 }
 
-// 归一化选项：字符串 → { label, value }；对象透传。
+// 归一化选项：字符串 → { label, value }；对象透传（含 disabled/hint）。
 function normalizeChoices(choices) {
   return (choices || []).map((c) => {
-    if (typeof c === "string") return { label: c, value: c, hint: "" };
-    return { label: c.label ?? String(c.value ?? ""), value: c.value ?? c.label, hint: c.hint ?? "" };
+    if (typeof c === "string") return { label: c, value: c, hint: "", disabled: false };
+    return {
+      label: c.label ?? String(c.value ?? ""),
+      value: c.value ?? c.label,
+      hint: c.hint ?? "",
+      disabled: c.disabled === true,
+    };
   });
 }
 
@@ -81,10 +86,17 @@ export function selectMenu(question, choices, options = {}) {
   const active = paint.active || ((s) => s);
   const dim = paint.dim || ((s) => s);
   const heading = paint.heading || ((s) => s);
+  // 未选中项的染色：默认走 value token（避免白底一片灰、黑底看不见）。
+  // 缺省用 dim 兜底，保证任何情况下都有色可染。
+  const item = paint.item || paint.dim || ((s) => s);
 
-  // 起始索引：优先命中 def，否则第 0 项。
-  let index = Math.max(0, items.findIndex((i) => i.value === options.def));
-  if (index < 0) index = 0;
+  // 起始索引：优先命中 def，且必须落在「可选」项上（跳过 disabled）。
+  const isSelectable = (it) => it && it.disabled !== true;
+  let index = Math.max(0, items.findIndex((i) => i.value === options.def && isSelectable(i)));
+  if (index < 0 || !isSelectable(items[index])) {
+    index = items.findIndex(isSelectable);
+    if (index < 0) index = 0; // 极端情况：全禁用，退回第 0 项
+  }
 
   // 能否真正交互：需要 TTY 且 stdin 支持 raw mode。
   const canInteract =
@@ -99,7 +111,18 @@ export function selectMenu(question, choices, options = {}) {
   }
 
   const POINTER = "❯";
+  const LOCK = "🔒";
   const lineCount = items.length + 1; // 标题占 1 行
+
+  // 上/下移动时跳过被禁用的项，避免高亮停在锁定项上。
+  const step = (from, dir) => {
+    let i = from;
+    for (let n = 0; n < items.length; n += 1) {
+      i = (i + dir + items.length) % items.length;
+      if (isSelectable(items[i])) return i;
+    }
+    return from; // 全禁用则不动
+  };
 
   function render(first) {
     if (!first) {
@@ -107,12 +130,15 @@ export function selectMenu(question, choices, options = {}) {
       stream.write(`${ESC}[${lineCount}A`);
     }
     stream.write(`${CLEAR_LINE}${heading(question)}\n`);
-    items.forEach((item, i) => {
+    items.forEach((it, i) => {
       const selected = i === index;
+      const disabled = it.disabled === true;
       const bullet = selected ? pointer(POINTER) : " ";
       const num = dim(`${i + 1}.`);
-      const label = selected ? active(item.label) : item.label;
-      const hint = item.hint ? ` ${dim(item.hint)}` : "";
+      // 三态染色：选中→active(亮)，禁用→dim(灰)，普通→item(value 色，任何背景可见)。
+      const rawLabel = disabled ? `${it.label} ${LOCK}` : it.label;
+      const label = selected ? active(rawLabel) : disabled ? dim(rawLabel) : item(rawLabel);
+      const hint = it.hint ? ` ${dim(it.hint)}` : "";
       stream.write(`${CLEAR_LINE}${bullet} ${num} ${label}${hint}\n`);
     });
   }
@@ -142,22 +168,25 @@ export function selectMenu(question, choices, options = {}) {
       const key = decodeKey(buf.toString("utf8"));
       if (!key) return;
       if (key === "up") {
-        index = (index - 1 + items.length) % items.length;
+        index = step(index, -1);
         render(false);
       } else if (key === "down") {
-        index = (index + 1) % items.length;
+        index = step(index, +1);
         render(false);
       } else if (key.startsWith("digit:")) {
         const n = Number(key.slice(6));
-        if (n >= 1 && n <= items.length) {
+        if (n >= 1 && n <= items.length && isSelectable(items[n - 1])) {
           index = n - 1;
           render(false);
         }
       } else if (key === "enter") {
-        finish(items[index] ? items[index].value : options.def);
+        // 落在禁用项上时不确认（理论上 index 永远在可选项，双保险）。
+        if (isSelectable(items[index])) {
+          finish(items[index] ? items[index].value : options.def);
+        }
       } else if (key === "cancel") {
         // 取消 = 用当前高亮项（对 setup 更友好，不中断流程）。
-        finish(items[index] ? items[index].value : options.def);
+        finish(isSelectable(items[index]) ? items[index].value : options.def);
       }
     };
 
