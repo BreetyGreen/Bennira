@@ -32,6 +32,8 @@ import {
   buildProjectSnapshot,
   buildAgentMessages,
   parseAgentAction,
+  toolSchemas,
+  actionFromToolCall,
   AGENT_TOOL_RISK,
   appendEvent,
   buildInitMessages,
@@ -224,6 +226,14 @@ export async function runAgentTurn({ root, config, t, rl, history, userInput, pr
   const g = t.glyphs;
   history.push({ role: "user", content: userInput });
 
+  // 工具协议：优先走原生 tool_calls（provider 暴露 generateWithTools 才有）。
+  // toolsSpec 一轮只算一次。nativeAvailable 是"本会话能力开关"——首次原生请求即失败
+  // （provider 不支持 tools）则本会话降级到老路。committedNative 记录"是否已成功用过
+  // 原生通道"：一旦用过，说明 provider 确实支持 tools，此后再报错就是真故障，不静默降级。
+  const toolsSpec = toolSchemas();
+  let nativeAvailable = typeof provider.generateWithTools === "function";
+  let committedNative = false;
+
   // 本轮的中断控制器：绑定 readline 的 SIGINT（Ctrl+C）。
   const abort = new AbortController();
   const onSigint = () => abort.abort();
@@ -235,7 +245,7 @@ export async function runAgentTurn({ root, config, t, rl, history, userInput, pr
       const snapshot = buildProjectSnapshot(inspectWorkspace(root));
       const messages = buildAgentMessages(snapshot, history);
 
-      // spinner 思考期转圈。agent 协议要完整 JSON，用非流式收（更稳），
+      // spinner 思考期转圈。agent 协议要完整结构，用非流式收（更稳），
       // 但传入中断 signal——思考期按 Ctrl+C 能立刻掐断请求。
       const spin = createSpinner("正在思考…", {
         stream: process.stdout,
@@ -243,15 +253,34 @@ export async function runAgentTurn({ root, config, t, rl, history, userInput, pr
         paint: (s) => t.accent(s),
       });
       spin.start();
-      let raw;
+
+      // 决定本步动作：优先原生 tool_calls，缺失/失败则回退老的 text-JSON 解析。
+      // step 归一成统一形状 { thought, action, args, toolCallId? }：
+      //   - toolCallId 存在 → 原生通道，观察走 role:"tool" 配对回喂；
+      //   - toolCallId 缺失 → 老通道，观察走 role:"user" + [观察] 前缀（原样保留）。
+      let step_;
       try {
-        raw = await provider.generate(messages, { signal: abort.signal });
+        step_ = nativeAvailable
+          ? await requestNativeStep(provider, messages, toolsSpec, abort.signal, history)
+          : await requestLegacyStep(provider, messages, abort.signal, history);
+        if (step_.usedNative) committedNative = true;
+      } catch (error) {
+        // 硬故障绝不吞：用户中断 / 网络被拒 / 配置错——原样抛出，交上层处理。
+        if (isHardFailure(error)) throw error;
+        // 仅当"还没成功用过原生通道"时，才把错误视为"provider 不支持 tools"，
+        // 降级到老路重试本步。已 committedNative 后再报错 = 真故障，照样抛。
+        if (nativeAvailable && !committedNative) {
+          nativeAvailable = false;
+          console.log(`  ${t.muted(g.arrow || "›")} ${t.muted("该服务不支持原生工具调用，已切换到兼容模式。")}`);
+          step_ = await requestLegacyStep(provider, messages, abort.signal, history);
+        } else {
+          throw error;
+        }
       } finally {
         spin.stop();
       }
 
-      const { thought, action, args } = parseAgentAction(raw);
-      history.push({ role: "assistant", content: raw });
+      const { thought, action, args, toolCallId } = step_;
 
       if (thought) {
         console.log(`  ${t.muted(g.arrow)} ${t.muted(thought)}`);
@@ -281,22 +310,78 @@ export async function runAgentTurn({ root, config, t, rl, history, userInput, pr
       if (risk === "danger") {
         const ok = await confirm(rl, t, actionConfirmPrompt(action, args));
         if (!ok) {
-          history.push({
-            role: "user",
-            content: `[观察] 用户拒绝了动作 ${action}。请换一个思路或询问用户。`,
-          });
+          pushObservation(history, toolCallId, `用户拒绝了动作 ${action}。请换一个思路或询问用户。`);
           console.log(`  ${t.warning("!")} ${t.muted("已拒绝，反馈给模型。")}`);
           continue;
         }
       }
 
       const observation = await executeTool(root, action, args, t);
-      history.push({ role: "user", content: `[观察] ${observation}` });
+      pushObservation(history, toolCallId, observation);
     }
 
     console.log(`  ${t.warning("!")} ${t.muted(`已达单轮最大步数（${MAX_STEPS}），暂停。可继续追问。`)}`);
   } finally {
     rl.off("SIGINT", onSigint);
+  }
+}
+
+// —— T3：一步"思考"的两条通道 ————————————————————————————————————————
+// 两者都返回统一形状：{ thought, action, args, toolCallId?, usedNative? }，
+// 并各自负责把"assistant 这一回合"压进 history（供下一步请求携带上下文）。
+// toolCallId 只在原生通道存在——它是 role:"tool" 回喂配对的钥匙。
+
+// 原生通道：走 generateWithTools，让端点返回结构化 tool_calls。
+async function requestNativeStep(provider, messages, tools, signal, history) {
+  const { text, toolCalls } = await provider.generateWithTools(messages, tools, { signal });
+
+  // 有工具调用：一步只处理一个（OpenAI 可能并行返回多个，但我们的 loop 是单工具/步）。
+  // assistant 回合必须原样带上 tool_calls[0]，否则下一轮请求会因"tool_call 无对应 tool 响应"报错。
+  if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+    const primary = toolCalls[0];
+    history.push({ role: "assistant", content: text || "", tool_calls: [primary] });
+    const act = actionFromToolCall(primary);
+    return {
+      thought: act.thought || "",
+      action: act.action,
+      args: act.args || {},
+      toolCallId: act.toolCallId,
+      usedNative: true,
+    };
+  }
+
+  // 无工具调用：模型给了纯文本。压进 history 后，尝试老解析（有些模型即便支持 tools
+  // 也会把动作写进 content）；解析不出动作则当作 finish 交付这段文本。
+  history.push({ role: "assistant", content: text || "" });
+  const parsed = parseAgentAction(text || "");
+  if (parsed.action && !parsed.fellBack) {
+    return { thought: parsed.thought || "", action: parsed.action, args: parsed.args || {}, usedNative: true };
+  }
+  return { thought: "", action: "finish", args: { message: text || "（无内容）" }, usedNative: true };
+}
+
+// 兼容通道：与改造前一字不差——generate 拿文本，parseAgentAction 解析，raw 压进 history。
+async function requestLegacyStep(provider, messages, signal, history) {
+  const raw = await provider.generate(messages, { signal });
+  history.push({ role: "assistant", content: raw });
+  const { thought, action, args } = parseAgentAction(raw);
+  return { thought, action, args };
+}
+
+// 硬故障：绝不能被"降级到老路"吞掉的错误。用户中断、网络被拒、模型配置错——
+// 这些和"provider 不支持 tools"是两回事，必须原样上抛。
+function isHardFailure(error) {
+  const code = error?.code;
+  return code === "USER_ABORT" || code === "NETWORK_DENIED" || code === "MODEL_CONFIG";
+}
+
+// 回喂观察：原生通道用 role:"tool" + tool_call_id 精确配对（OpenAI 规范）；
+// 老通道无 id，沿用 role:"user" + [观察] 前缀（改造前契约，T1 测试锚定此形状）。
+function pushObservation(history, toolCallId, observation) {
+  if (toolCallId) {
+    history.push({ role: "tool", tool_call_id: toolCallId, content: String(observation) });
+  } else {
+    history.push({ role: "user", content: `[观察] ${observation}` });
   }
 }
 

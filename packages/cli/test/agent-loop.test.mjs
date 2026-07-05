@@ -58,6 +58,36 @@ function fakeReadline(answer = "y") {
   };
 }
 
+// Native fake provider：暴露 generateWithTools，按脚本返回结构化 { text, toolCalls }。
+// 每条脚本项形如 { toolCalls:[{id,function:{name,arguments}}] } 或 { text }（无工具=交付）。
+// 用来验证 T3 的原生通道：结构化 tool_calls → role:"tool" 回喂配对。
+function nativeProvider(script) {
+  let i = 0;
+  return {
+    calls: 0,
+    toolCallsSeen: [],
+    async generateWithTools(_messages, _tools) {
+      this.calls += 1;
+      if (i >= script.length) {
+        throw new Error(`nativeProvider 脚本已耗尽（第 ${i + 1} 次调用无对应响应）`);
+      }
+      const item = script[i++];
+      const toolCalls = Array.isArray(item.toolCalls) ? item.toolCalls : [];
+      return { text: item.text || "", toolCalls, finishReason: toolCalls.length ? "tool_calls" : "stop" };
+    },
+    // finish 分支的 streamFinish 在 enabled:false 时不调 provider，保留兜底。
+    async generateStream(_messages, onToken = () => {}) {
+      onToken("");
+      return "";
+    },
+  };
+}
+
+// 构造一个结构化 tool_call（OpenAI 形状：arguments 是 JSON 字符串）。
+function toolCall(id, name, argsObj) {
+  return { id, type: "function", function: { name, arguments: JSON.stringify(argsObj) } };
+}
+
 // 造一个真实的临时项目根，放几个可读文件。返回 { root, cleanup }。
 function makeTempProject() {
   const root = mkdtempSync(join(tmpdir(), "bennira-loop-"));
@@ -198,6 +228,102 @@ test("loop: 非 JSON 输出 —— 经 parseAgentAction 兜底为 finish 交付"
     // 不应有任何 [观察]（没执行工具）
     const hasObservation = history.some((m) => m.role === "user" && m.content.startsWith("[观察]"));
     assert.ok(!hasObservation, "兜底路径不该执行工具");
+  } finally {
+    cleanup();
+  }
+});
+
+// ---- T3：原生 tool_calls 通道 ----------------------------------------------
+// 上面 6 个用例的 provider 只有 generate（无 generateWithTools），故走老路 fallback，
+// 锚定的是"改造前"契约。下面的 provider 暴露 generateWithTools，验证 T3 新增的原生通道：
+// 结构化 tool_calls → 执行工具 → 观察以 role:"tool" + tool_call_id 配对回喂。
+
+test("原生: read_file round-trip —— 结构化 tool_calls 且观察走 role:tool 回喂", async () => {
+  const { root, cleanup } = makeTempProject();
+  try {
+    const provider = nativeProvider([
+      { toolCalls: [toolCall("call_1", "read_file", { path: "README.md" })] },
+      { text: "README 已读" }, // 无 tool_calls = 交付
+    ]);
+    const history = [];
+    await runAgentTurn(runOpts({ root, provider, history }));
+    assert.equal(provider.calls, 2, "两步：读 + 交付");
+    // 关键：观察必须以 role:"tool" + 正确的 tool_call_id 回喂（OpenAI 规范），不再是 [观察] 前缀
+    const toolMsg = history.find((m) => m.role === "tool");
+    assert.ok(toolMsg, "原生通道应产生一条 role:tool 消息");
+    assert.equal(toolMsg.tool_call_id, "call_1", "tool_call_id 必须与 tool_calls[0].id 配对");
+    assert.ok(toolMsg.content.includes("关键字ALPHA"), "role:tool 内容应含真实文件内容");
+    // 且 assistant 回合原样带上了 tool_calls[0]（否则下一轮请求会报错）
+    const asstWithCall = history.find((m) => m.role === "assistant" && Array.isArray(m.tool_calls));
+    assert.ok(asstWithCall, "assistant 回合应携带 tool_calls[0]");
+    assert.equal(asstWithCall.tool_calls[0].id, "call_1");
+    // 不应再出现老的 [观察] 前缀
+    const legacyObs = history.some((m) => m.role === "user" && typeof m.content === "string" && m.content.startsWith("[观察]"));
+    assert.ok(!legacyObs, "原生通道不应再用 [观察] 前缀回喂");
+  } finally {
+    cleanup();
+  }
+});
+
+test("原生: 单步交付 —— 无 tool_calls 只有 text 时当作 finish", async () => {
+  const { root, cleanup } = makeTempProject();
+  try {
+    const provider = nativeProvider([{ text: "这是最终答复" }]);
+    const history = [];
+    await runAgentTurn(runOpts({ root, provider, history }));
+    assert.equal(provider.calls, 1, "只调一次即交付");
+    const asst = history.find((m) => m.role === "assistant");
+    assert.ok(asst && asst.content.includes("最终答复"));
+    // 交付路径不该有 role:tool
+    assert.ok(!history.some((m) => m.role === "tool"), "交付不产生 tool 消息");
+  } finally {
+    cleanup();
+  }
+});
+
+test("原生: write_file 经审批 —— 同意后真写且观察以 role:tool 回喂", async () => {
+  const { root, cleanup } = makeTempProject();
+  try {
+    const provider = nativeProvider([
+      { toolCalls: [toolCall("call_w", "write_file", { path: "out.txt", content: "HELLO_NATIVE" })] },
+      { text: "已写入" },
+    ]);
+    const rl = fakeReadline("y");
+    const history = [];
+    await runAgentTurn(runOpts({ root, provider, history, rl }));
+    assert.ok(rl.questions.length >= 1, "danger 工具在原生通道仍应触发确认");
+    const written = join(root, "out.txt");
+    assert.ok(existsSync(written), "同意后文件应真被写入");
+    assert.equal(readFileSync(written, "utf8"), "HELLO_NATIVE");
+    const toolMsg = history.find((m) => m.role === "tool" && m.tool_call_id === "call_w");
+    assert.ok(toolMsg, "写入观察应以 role:tool + call_w 回喂");
+  } finally {
+    cleanup();
+  }
+});
+
+test("原生: provider 首次即报错 —— 安全降级到老路，不吞成 finish", async () => {
+  const { root, cleanup } = makeTempProject();
+  try {
+    // 这个 provider 同时有 generateWithTools（首次即抛非硬故障错）和 generate（老路能跑）。
+    // 期望：loop 探测原生失败 → 降级 → 用老路 generate 完成交付。
+    const legacy = scriptedProvider(['{"action":"finish","args":{"message":"老路交付"}}']);
+    const provider = {
+      calls: 0,
+      async generateWithTools() {
+        // 模拟"端点不支持 tools，返回 4xx"这类可降级错误（非 USER_ABORT/NETWORK_DENIED/MODEL_CONFIG）。
+        const e = new Error("模型返回 400：unsupported parameter: tools");
+        e.code = "MODEL_REQUEST";
+        throw e;
+      },
+      generate: (...a) => legacy.generate(...a),
+      generateStream: (...a) => legacy.generateStream(...a),
+    };
+    const history = [];
+    await runAgentTurn(runOpts({ root, provider, history }));
+    // 降级后应由老路交付，history 里有老路的 assistant 文本
+    const asst = history.find((m) => m.role === "assistant" && typeof m.content === "string" && m.content.includes("老路交付"));
+    assert.ok(asst, "原生失败后应安全降级到老路完成交付");
   } finally {
     cleanup();
   }

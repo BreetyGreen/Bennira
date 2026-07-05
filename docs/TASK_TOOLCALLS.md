@@ -54,10 +54,21 @@
     - 新增 6 单测（toolSchemas×2 + actionFromToolCall×4），**179 全绿（173+6）**。切换 loop 去用
       新方法留给 T3。
 
-- [ ] **T3 · `repl.mjs` loop 改 `role:"tool"` 回喂**
+- [x] **T3 · `repl.mjs` loop 改 `role:"tool"` 回喂** ✅ 2026-07-06
   - 拿到 `tool_calls` 时：assistant 消息带 `tool_calls`，观察以 `role:"tool"` + `tool_call_id` 回喂。
   - 无 `tool_calls`（fallback 路径）时：仍走旧的 `role:"user"` + `[观察]` 前缀。
   - 文件：`packages/cli/src/repl.mjs`
+  - **落地（收敛：主干切原生 + 老路降为窄兜底）**：
+    - loop 每步按**能力探测**分叉：`typeof provider.generateWithTools === "function"` →
+      `requestNativeStep`（结构化 tool_calls）；否则 `requestLegacyStep`（老 generate + parseAgentAction）。
+    - 新增 4 个辅助函数：`requestNativeStep` / `requestLegacyStep` / `isHardFailure` / `pushObservation`。
+    - **fallback 只在"尚未成功用过原生通道"时触发**（`committedNative` 门闩）：首次原生请求即失败
+      （provider 不支持 tools）→ 本会话降级老路；已用过原生后再报错 = 真故障，照抛。
+    - **硬故障绝不吞**：`USER_ABORT` / `NETWORK_DENIED` / `MODEL_CONFIG` 原样上抛，不被误当"不支持 tools"。
+    - **一步只处理 `toolCalls[0]`**：assistant 回合原样携带它，避免"tool_call 无对应 tool 响应"报错。
+    - `pushObservation`：有 `toolCallId` 走 `role:"tool"`，否则走老的 `role:"user" + [观察]`。
+    - 测试：T1 那 6 个（fake 只有 generate）**不动一行仍绿**，证明老路等价；新增 4 个原生用例
+      （read_file 走 role:tool 配对 / 单步交付 / write_file 审批 / 首次失败安全降级）。**183 全绿（179+4）**。
 
 ### 阶段 2 · 收尾验证
 
@@ -76,3 +87,6 @@
 - 2026-07-06：**T2 完成**。core 侧「只加不改」落地原生 tool_calls 能力：`toolSchemas()` /
   `actionFromToolCall()` / `generateWithTools()`，老方法零改动、对 repl 透明，179 全绿（173+6）。
   下一步 T3 把 agent loop 切到新方法并改 role:"tool" 回喂。
+- 2026-07-06：**T3 完成**。agent loop 收敛到"原生主干 + 老路窄兜底"：能力探测分叉、
+  `committedNative` 门闩、硬故障不吞、一步只处理 tool_calls[0]、观察按通道分流回喂。
+  T1 六测不动仍绿（老路等价），新增 4 原生用例，**183 全绿（179+4）**。剩 T4 收尾（全量回归 + 更新 AGENTS.md）。
