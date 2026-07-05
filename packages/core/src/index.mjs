@@ -56,9 +56,12 @@ export {
 export {
   createProvider,
   modelReadiness,
+  PROVIDER_PRESETS,
+  findProviderPreset,
   NetworkDeniedError,
   ModelConfigError,
   ModelRequestError,
+  UserAbortError,
 } from "./model.mjs";
 export {
   buildProjectSnapshot,
@@ -67,6 +70,7 @@ export {
   parsePlanResponse,
 } from "./context.mjs";
 export { createSpinner } from "./spinner.mjs";
+export { selectMenu, textInput, decodeKey } from "./prompt.mjs";
 export {
   AGENT_TOOLS,
   AGENT_TOOL_RISK,
@@ -74,3 +78,16 @@ export {
   buildAgentMessages,
   parseAgentAction,
 } from "./agent.mjs";
+export {
+  SLASH_COMMANDS,
+  slashCompleter,
+  normalizeHistory,
+  appendHistory,
+} from "./repl-support.mjs";
+export {
+  extractAtMentions,
+  atTokenAtEnd,
+  atFileCompleter,
+  initialInputState,
+  feedInputLine,
+} from "./input-support.mjs";
