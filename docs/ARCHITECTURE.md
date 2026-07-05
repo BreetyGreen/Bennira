@@ -1,4 +1,90 @@
-# Bennira 内核架构草案
+# Bennira 内核架构
+
+> **本文结构**：第一部分「实现现状」描述**当前代码里真实存在**的架构（以此为准）；其后的「设计草案 / 长期架构」是早期规划，保留作为方向参考，可能超前于实现。
+
+---
+
+## 一、实现现状（与代码一致）
+
+### 分包与边界
+
+Bennira 是 npm workspaces monorepo，两个零第三方依赖的包（均 `type: module`，纯 `.mjs`，Node `>=20`）：
+
+| 包 | 角色 | 职责 |
+|---|---|---|
+| `@bennira/core` | **决策侧 + 纯逻辑** | 模型 provider、agent 协议、配置/凭证/主题/事件、REPL 输入侧纯函数、方向键交互组件。可离线单测。 |
+| `@bennira/cli` | **执行侧 + 交互** | 命令路由、setup 向导、REPL、`executeTool`（真正的 fs / exec）。唯一依赖 `@bennira/core`。 |
+
+**关键原则**：决策（模型输出 `{thought, action, args}` JSON）在 core，执行（解析 + fs/exec）在 cli。两侧通过内存中的 `history` 数组传递，形成 agentic 闭环。
+
+### Agentic 闭环（真实循环）
+
+```text
+用户输入
+  ↓
+buildAgentMessages(history)           [core]  组装消息
+  ↓
+provider.generate(messages,{signal})  [core]  模型决策，吐 JSON
+  ↓
+parseAgentAction(text)                [core]  容错解析，兜底 finish
+  ↓
+executeTool(action, args)             [cli]   落地：read_file/list_files/search/write_file/run_command
+  ↓
+history.push([观察结果])                       回喂
+  ↓
+（循环，最多 MAX_STEPS=12，直到 action=finish 交付）
+```
+
+`generateStream` 走 SSE 逐 token（用于 `/init` `/plan` 与流式回答）；`generate` 非流式（用于 agentic 每一步的结构化 JSON 决策，防漂移）。二者都接受外部 `{signal}`，与内部超时 signal 通过 `linkAbort` 合流；Ctrl+C 触发 `UserAbortError(code=USER_ABORT)`，与「超时/网络失败」精确区分。
+
+### 实际工具集（agent.mjs 的 `AGENT_TOOLS`）
+
+| 工具 | 风险 | 说明 |
+|---|---|---|
+| `read_file` | safe | 读文件（上限 `MAX_READ_CHARS=6000`） |
+| `list_files` | safe | 列目录 |
+| `search` | safe | 文本搜索 |
+| `write_file` | **danger** | 写文件，执行前确认 |
+| `run_command` | **danger** | 跑命令（`execSync`，超时 120s），执行前确认 |
+| `finish` | safe | 交付最终答案，结束循环 |
+
+> 注：本节工具集是**当前实现**。下文「工具注册表」小节列的是早期设计命名（`write_doc` / `git_status` 等），已被上表取代。
+
+### 权限默认值（memory.mjs 的 `defaultConfig`）
+
+| 权限 | 默认 | 含义 |
+|---|---|---|
+| 读取 | 允许 | 读文件 / 列目录 / 搜索 |
+| 写入 | **需确认** | 修改工作区文件 |
+| 执行 | **禁止**（deny）| 运行本地命令 |
+| 网络 | **禁止**（deny）| 访问模型 API |
+
+### REPL 与输入侧能力
+
+- slash 命令：`/help` `/status` `/init` `/plan` `/clear` `/exit`（`repl-support.mjs` 的 `SLASH_COMMANDS` 为单一事实源，帮助与 Tab 补全同源）。
+- `@文件` 引用（`input-support.mjs`）：`extractAtMentions` 提取、`atFileCompleter` 补全、提交时把文件内容作独立上下文块注入。
+- 多行输入：`feedInputLine` 状态机——反斜杠续行 + 三引号块。
+- 历史：`normalizeHistory` / `appendHistory`，落 `~/.bennira/repl_history`（跨会话共享）。
+
+### 落盘
+
+- 全局层 `~/.bennira/`（`globalRoot()`，可被 `BENNIRA_HOME` 覆盖）：`config.json` / `secrets.json` / `repl_history`。
+- 项目层 `<project>/.bennira/`：`config.json` / `secrets.json`（chmod 600，自动 gitignore）/ `state.json` / `logs/events.jsonl` / `last-plan.md`。
+- 密钥优先级：env → 项目 secrets → 全局 secrets。
+
+### 语言与技术形态（现状修正）
+
+早期草案设想 TypeScript；**实际实现是纯 Node.js ESM（`.mjs`）+ 原生 fetch，零第三方运行时依赖**，测试用 `node:test`。这一取舍换来了「零依赖、免构建、`npm link` 后改码即生效」的轻量迭代。
+
+### 测试
+
+`node --test`，11 个测试文件、110 用例，全部离线不需要真实 key。见 README「开发」一节。
+
+---
+
+## 二、设计草案 / 长期架构（早期规划，供方向参考）
+
+> 以下为 Alpha 初期的设计草案，部分能力（如 Shell 执行）**已在上文「实现现状」中落地**，部分（MCP / 多 Agent / 插件）仍是未来方向。阅读时以第一部分为准。
 
 ## 架构目标
 
@@ -164,7 +250,7 @@ flowchart TB
 - Permission Policy：先定义权限模型，Alpha 只允许文档写入前确认。
 - Tool Registry：只注册文件读取、文本搜索、文档写入、状态查看四类工具。
 
-Alpha 暂不实现：
+Alpha 暂不实现（**注：其中「真实 Shell 命令执行」现已实现，见第一部分工具集 `run_command`；其余仍为未来方向**）：
 
 - 真实 Shell 命令执行。
 - 复杂 Git 操作。

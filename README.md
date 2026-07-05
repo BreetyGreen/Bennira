@@ -6,10 +6,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
 ![Zero deps](https://img.shields.io/badge/dependencies-0-blue.svg)
+![Tests](https://img.shields.io/badge/tests-110%20passing-brightgreen.svg)
 
 **English** → [README.en.md](./README.en.md)
 
-Bennira 是一个探索中的本地代码 Agent。它的方向类似 Codex / Claude Code：进入一个代码库，理解项目结构，和你连续对话，调用工具，小步修改文件并跑命令，通过事件日志和交接文档形成可恢复的闭环。
+Bennira 是一个探索中的本地代码 Agent。它的**产品体验对齐 Codex / Claude Code**：进入一个代码库，理解项目结构，和你连续对话，调用工具，小步修改文件并跑命令，通过事件日志和交接文档形成可恢复的闭环。
 
 它的差异化不在于复刻，而在于**把一个模糊的中文想法，沉淀成可恢复、可继续、可逐步执行的项目状态**。
 
@@ -19,12 +20,15 @@ Bennira 是一个探索中的本地代码 Agent。它的方向类似 Codex / Cla
 
 ## 特性
 
-- 🗣️ **交互式 REPL** —— 裸敲 `bennira` 进入持久会话，连续对话、上下文累积。
-- 🌊 **流式输出** —— 接入 OpenAI 兼容协议（如 DeepSeek），回答逐字冒出。
-- 🤖 **Agentic 能力** —— 能读文件、改代码、跑命令，走 ReAct 循环（思考 → 调工具 → 观察 → 再想）。危险动作前先征求确认。
-- 🎨 **八方旅人职业配色** —— 8 套主题一键切换，支持真彩色终端。
-- 🔒 **谨慎的安全边界** —— 凭证只存本地、绝不入库；网络权限默认关闭；路径锁死在项目根内。
-- 📦 **零运行时依赖** —— 纯 Node.js ESM，原生 `fetch` 直连模型，无 SDK。
+- 🗣️ **交互式 REPL** —— 裸敲 `bennira` 进入持久会话，连续对话、上下文累积、跨会话历史持久化。
+- 🌊 **真流式输出** —— 原生 `fetch` 直连 OpenAI 兼容协议（如 DeepSeek），SSE 逐 token 冒出。
+- ⛔ **Ctrl+C 中断当前轮** —— 停下正在跑的这一轮回到提示符，不退出进程；「用户中断」与「超时/网络失败」被精确区分。
+- 🤖 **Agentic 能力** —— 读文件、改代码、跑命令，走 ReAct 循环（思考 → 调工具 → 观察 → 再想），最多 12 步收敛到 `finish`。危险动作前先征求确认。
+- ⌨️ **顺手的输入侧** —— slash 命令 Tab 补全、`@文件` 引用（把文件内容作独立上下文块注入）、多行输入（反斜杠续行 `\` + 三引号块 `"""`）。
+- 🎛️ **服务商选择向导** —— `setup` 里选一家（DeepSeek / OpenAI / Kimi / 通义 / 智谱 / Ollama / 自定义），自动带出 baseURL 和默认模型，通常只需再填一个 key。
+- 🎨 **八方旅人职业配色** —— 8 套主题一键切换，支持真彩色终端与 CJK 宽度对齐。
+- 🔒 **谨慎的安全边界** —— 凭证只存本地、绝不入库；网络 / 执行默认关闭；写入默认需确认；路径锁死在项目根内。
+- 📦 **零运行时依赖** —— 纯 Node.js ESM（`.mjs`），无任何第三方 SDK。
 
 ---
 
@@ -49,6 +53,8 @@ cd packages/cli
 npm link           # 注册一次，之后任意目录都能敲 bennira
 ```
 
+> **提示**：`npm link` 请用你终端里日常使用的那个 Node（例如 nvm 的 v20），否则 `bennira` 可能被装到不在 PATH 里的目录。全局 `bennira` 是指向源码的软链，**改代码即时生效，无需重新 link**。
+
 之后在任意目录：
 
 ```bash
@@ -57,7 +63,7 @@ bennira status     # 查看状态
 bennira            # 进入交互 REPL
 ```
 
-> 不想全局注册也行，直接 `node ./packages/cli/src/index.mjs <命令>` 或 `npm run bennira -- <命令>`。
+> 不想全局注册也行，直接 `node ./packages/cli/src/index.mjs <命令>`。
 
 ### 首次设置
 
@@ -65,20 +71,22 @@ bennira            # 进入交互 REPL
 bennira setup
 ```
 
-向导会依次询问 6 项：
+向导分四步，**有限选项走方向键菜单（↑↓ / 数字直选 / Enter 确认）**，自由文本才需要打字：
 
-| # | 问题 | 示例 |
+| 步骤 | 交互方式 | 说明 |
 |---|---|---|
-| ① | 配置作用域 | `global`（所有项目共享）/ `project`（仅当前） |
-| ② | 职业配色 | `thief` |
-| ③ | 模型 baseURL | `https://api.deepseek.com` |
-| ④ | 模型名称 | `deepseek-chat` |
-| ⑤ | API key | 你的 key（存本地 `secrets.json`，自动 gitignore + chmod 600） |
-| ⑥ | 允许联网 | `y` |
+| ① 配置作用域 | 菜单 | `global`（所有项目共享）/ `project`（仅当前目录） |
+| ② 配色主题 | 菜单 | 8 种职业配色，默认 `thief`（盗贼紫） |
+| ③ 模型服务商 | 菜单 + 文本 | **选一家服务商** → 自动带出 baseURL / 默认模型（回车即用、也可改）→ 填 API key |
+| ④ 联网权限 | 菜单 | `deny`（默认，谨慎）/ `allow`（调云端模型需要） |
 
-> **凭证安全**：key 只写入 `.bennira/secrets.json`，绝不进 `config.json`、绝不入库。在 project 作用域配 key 时，Bennira 会**自动**把 `secrets.json` 加进 `.gitignore`。也可用环境变量 `BENNIRA_API_KEY` 注入（CI / 生产推荐）。
+③ 内置服务商预设：**DeepSeek**（默认第一）、OpenAI、Kimi（Moonshot）、通义千问（Qwen）、智谱（GLM）、Ollama（本地）、自定义。选「自定义」才需要手填 baseURL/模型名。
+
+> **凭证安全**：key 只写入 `.bennira/secrets.json`（`chmod 600`），绝不进 `config.json`、绝不入库。在 project 作用域配 key 时会**自动**把 `secrets.json` 加进 `.gitignore`。也可用环境变量 `BENNIRA_API_KEY` 注入（CI / 生产推荐）。
 
 配好后 `bennira status` 显示「✓ 已就绪」即可开始。
+
+> 全程非交互也支持：`printf 'project\nwarrior\n...\n' | bennira setup`（管道 / CI 场景自动降级为逐行读取，绝不挂起）。
 
 ---
 
@@ -86,15 +94,15 @@ bennira setup
 
 | 命令 | 需要模型 | 作用 |
 |---|---|---|
-| `bennira`（裸命令）| ✓ | 进入交互式 REPL 会话 |
-| `setup` | ✗ | 首次设置：主题 / 模型 / 网络权限 |
+| `bennira`（裸命令）| ✓ | 进入交互式 REPL 会话（默认命令） |
+| `setup` | ✗ | 首次设置：作用域 / 主题 / 服务商 / 网络权限 |
 | `inspect [path]` | ✗ | 观察项目结构、Git 状态、关键文档 |
 | `init [path]` | ✓ | 读懂项目并生成 / 更新 `AGENTS.md` |
 | `status [path]` | ✗ | 查看 Bennira 与模型状态（支持 `--json`） |
 | `plan "中文想法"` | ✓ | 结合项目状态生成下一步计划（支持 `--no-write`） |
 | `log [--limit N]` | ✗ | 查看最近事件日志 |
 | `handoff` | ✗ | 刷新 `docs/HANDOFF.md` 跨工具交接文档 |
-| `theme [list\|use\|set\|reset]` | ✗ | 查看 / 切换 / 自定义配色 |
+| `theme [list\|show\|use\|set\|reset]` | ✗ | 查看 / 切换 / 自定义配色 |
 
 > 追加 `--no-color` 或设置 `NO_COLOR` 可强制纯文本输出。
 
@@ -106,11 +114,28 @@ bennira setup
 
 ```
 你 › 帮我看看 packages/core 里都有什么
-你 › 给 README 加一段安装说明        # 写文件前会问你 y/N
-你 › 跑一下测试                       # 执行命令前会问你 y/N
+你 › 参考 @packages/core/src/model.mjs，给它补一段错误处理    # @文件引用
+你 › 给 README 加一段安装说明                                  # 写文件前会问你 y/N
+你 › 跑一下测试                                                # 执行命令前会问你 y/N
 ```
 
-内置 slash 命令：`/help` `/status` `/clear` `/exit`。
+**内置 slash 命令**（支持 Tab 补全）：
+
+| 命令 | 作用 |
+|---|---|
+| `/help`（`?`）| 显示帮助 |
+| `/status` | 当前模型 / 权限就绪状态 |
+| `/init` | 流式生成 / 更新 `AGENTS.md` |
+| `/plan <想法>` | 流式生成下一步计划 |
+| `/clear` | 清屏并重置会话上下文 |
+| `/exit`（`quit` / `q`）| 退出 REPL |
+
+**输入侧技巧**：
+
+- **`@文件` 引用** —— 行首或空白后写 `@path`，提交时把该文件内容作为独立上下文块喂给模型；`@` 正在敲时按 Tab 补全项目内文件路径（含空格的路径自动加引号 `@"a b/c.txt"`）。邮箱 `a@b.com` 不会被误判。
+- **多行输入** —— 行尾单个反斜杠 `\` 续行；或单独一行 `"""` 进入三引号块、再一行 `"""` 结束（块内原样保留，适合粘贴大段代码）。
+- **Ctrl+C** —— 打断当前正在跑的这一轮（模型输出或工具循环），回到提示符，不退出进程；连按可退出。
+- **历史持久化** —— 输入历史落在 `~/.bennira/repl_history`，跨会话、跨项目共享，↑↓ 翻阅。
 
 **安全保障**：改文件、跑命令前一律先征求确认；路径锁死在项目根内，防 `../` 逃逸；每个动作都写入事件日志。
 
@@ -118,12 +143,45 @@ bennira setup
 
 ## 架构
 
-Monorepo，两个包：
+Monorepo，两个包，**决策与执行边界干净劈开**：
 
-- **`@bennira/core`** —— 纯逻辑内核：配置分层、凭证隔离、模型 provider（流式 + 非流式）、agent 协议、主题系统、事件日志。零依赖、可离线单测。
-- **`@bennira/cli`** —— 命令行外壳：REPL、setup 向导、命令路由、工具执行与确认交互。
+- **`@bennira/core`** —— 纯逻辑内核（**决策侧 + 可测纯函数**）：模型 provider（`generate` / `generateStream`，带外部中断信号）、agent 协议（`buildAgentMessages` / `parseAgentAction`）、配置分层、凭证隔离、主题系统、事件日志、REPL 输入侧纯逻辑（补全 / 多行 / @引用）、零依赖交互组件（方向键菜单）。**零依赖、可离线单测。**
+- **`@bennira/cli`** —— 命令行外壳（**执行侧 + 交互**）：REPL、setup 向导、命令路由、`executeTool`（真正的 fs 读写 / 命令执行）与确认交互。唯一依赖 `@bennira/core`。
+
+**核心闭环**：模型在 core 里吐出 `{thought, action, args}` 的 JSON（决策）→ cli 的 `parseAgentAction` + `executeTool` 落地执行（fs / exec）→ 观察结果 `history.push` 回喂 → 再次进入模型，循环至 `finish`（`MAX_STEPS=12`）。这条 history 回喂就是 agentic 的本质。
 
 详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+
+### 目录速览
+
+```
+Bennira/
+├── packages/
+│   ├── core/                 @bennira/core（零依赖内核）
+│   │   ├── src/
+│   │   │   ├── model.mjs         provider / 流式 / 中断 / 服务商预设
+│   │   │   ├── agent.mjs         ReAct 工具协议与解析
+│   │   │   ├── context.mjs       项目快照 / init / plan 消息构建
+│   │   │   ├── prompt.mjs        方向键菜单 / 文本输入（零依赖）
+│   │   │   ├── repl-support.mjs  slash 命令 / 补全 / 历史（纯函数）
+│   │   │   ├── input-support.mjs 多行输入 / @文件引用（纯函数）
+│   │   │   ├── memory.mjs        配置分层读写 / 项目记忆
+│   │   │   ├── scope.mjs         全局/项目作用域与路径
+│   │   │   ├── secrets.mjs       凭证隔离（secrets.json, chmod 600）
+│   │   │   ├── theme.mjs         八职业配色 / CJK 宽度
+│   │   │   ├── workspace.mjs     项目观察（git / 文件树 / 文档）
+│   │   │   ├── events.mjs        JSONL 事件日志
+│   │   │   ├── format.mjs        终端渲染
+│   │   │   ├── spinner.mjs       零依赖加载动画
+│   │   │   ├── handoff.mjs       生成 docs/HANDOFF.md
+│   │   │   └── index.mjs         统一导出面
+│   │   └── test/                 11 个测试文件，110 用例
+│   └── cli/
+│       └── src/
+│           ├── index.mjs         子命令路由 + setup 向导
+│           └── repl.mjs          交互式 REPL + executeTool
+└── docs/                     产品定义 / 架构 / 路线图等
+```
 
 ---
 
@@ -134,7 +192,38 @@ npm test              # 运行全部单测（node:test，零依赖，无需 API 
 npm run test:smoke    # 无 key 冒烟测试：验证只读命令能启动
 ```
 
-测试全部离线、不需要真实 key —— 测的是纯逻辑（配置合并、凭证优先级、plan 解析、主题降级、gitignore 保护）。CI 在无 key 环境下也能全绿。
+**当前测试规模：110 用例全绿**，全部离线、不需要真实 key——测的是纯逻辑（配置合并、凭证优先级、plan 解析、主题降级、gitignore 保护、方向键解码、服务商预设、中断语义、slash 补全 / 历史、@引用与多行输入）。CI 在无 key 环境下也能全绿。
+
+> ⚠️ 跑测试请用无参 `node --test`（即 `npm test`）。Node 22 下 `node --test <目录>` 会把目录当模块加载而报错。
+
+测试文件一览：
+
+| 文件 | 覆盖 |
+|---|---|
+| `abort.test.mjs` | `UserAbortError` 与预中断 signal 语义 |
+| `agent.test.mjs` | `parseAgentAction` / 工具风险 / 消息组装 |
+| `config-layering.test.mjs` | 配置分层合并、apiKey 不落 config |
+| `ensure-gitignore.test.mjs` | secrets 排除幂等 |
+| `plan-and-model.test.mjs` | 计划解析 + 权限门 |
+| `prompt.test.mjs` | `decodeKey` / 非 TTY 惰性降级 |
+| `provider-presets.test.mjs` | 服务商预设表结构 |
+| `repl-support.test.mjs` | slash 补全 / 历史归一 |
+| `input-support.test.mjs` | @引用提取 / 补全 / 多行状态机 |
+| `secrets.test.mjs` | 凭证来源优先级 |
+| `spinner.test.mjs` | 静默降级 |
+| `theme.test.mjs` | 配色降级 / 解析 / CJK 宽度 |
+
+---
+
+## 数据落盘
+
+| 位置 | 内容 |
+|---|---|
+| `~/.bennira/`（可被 `BENNIRA_HOME` 覆盖）| 全局 `config.json` / `secrets.json` / `repl_history` |
+| `<project>/.bennira/` | 项目层 `config.json` / `secrets.json` / `state.json` / `logs/events.jsonl` / `last-plan.md` |
+| `<project>/docs/HANDOFF.md` | 跨工具交接文档 |
+
+**密钥来源优先级**：环境变量（`BENNIRA_API_KEY` / `OPENAI_API_KEY`）→ 项目 `secrets.json` → 全局 `secrets.json`。
 
 ---
 
@@ -152,8 +241,10 @@ npm run test:smoke    # 无 key 冒烟测试：验证只读命令能启动
 ## 路线图
 
 - [x] 小偷 Alpha：项目观察、记忆、事件日志、跨工具交接
-- [x] 流式输出 + Spinner + 交互式 REPL
+- [x] 真流式输出 + Spinner + 交互式 REPL
 - [x] 突破只读：agentic 改文件 / 跑命令（带确认）
+- [x] 执行体验：Ctrl+C 中断、`/init` `/plan`、Tab 补全、历史持久化
+- [x] 输入体验：多行输入、`@文件` 引用、服务商选择向导
 - [ ] 更细粒度的权限门与 diff 预览
 - [ ] MCP / 插件加载
 - [ ] 多 Agent 协作
