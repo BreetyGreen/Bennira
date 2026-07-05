@@ -149,13 +149,16 @@ async function setup(args) {
   console.log("");
 
   // 染色配件：菜单指针 / 高亮项 / 普通项 / 灰字 / 标题，全部走主题 token。
-  // item（未选中项）用 value 色渲染，避免白底一片灰、黑底看不见。
+  // 关键（明暗无关，不赌 OSC 11 探测）：
+  //   - 选中项用 selected（品牌紫背景块 + 白字），任何终端背景都醒目；
+  //   - 未选中项用终端默认前景（不染色），任何背景都可读，绝不再出现白底近白字；
+  //   - 指针 / 标题用 brand（中紫），muted 用中灰，两种背景都清晰。
   const menuPaint = {
-    pointer: (s) => t.accent(s),
-    active: (s) => t.accent(s),
-    item: (s) => t.value(s),
+    pointer: (s) => t.brand(s),
+    active: (s) => t.selected(s),
+    item: (s) => s,
     dim: (s) => t.muted(s),
-    heading: (s) => t.value(s),
+    heading: (s) => t.brand(s),
   };
   const textPaint = { label: (s) => t.value(s), dim: (s) => t.muted(s) };
 
@@ -777,8 +780,8 @@ async function keyCommand(args) {
       const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
       const textPaint = { label: (s) => t.value(s), dim: (s) => t.muted(s) };
       const menuPaint = {
-        pointer: (s) => t.accent(s), active: (s) => t.accent(s),
-        item: (s) => t.value(s), dim: (s) => t.muted(s), heading: (s) => t.value(s),
+        pointer: (s) => t.brand(s), active: (s) => t.selected(s),
+        item: (s) => s, dim: (s) => t.muted(s), heading: (s) => t.brand(s),
       };
 
       // 参数形态优先：第一个非 -- 参数当作 key。

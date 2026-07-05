@@ -27,6 +27,11 @@ function fg(hex) {
   return `\u001b[38;2;${r};${g};${b}m`;
 }
 
+function bg(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  return `\u001b[48;2;${r};${g};${b}m`;
+}
+
 function hexToRgb(hex) {
   const clean = String(hex).replace(/^#/, "").trim();
   const full =
@@ -45,6 +50,7 @@ function hexToRgb(hex) {
 
 const BOLD = "\u001b[1m";
 const DIM = "\u001b[2m";
+const INVERT = "\u001b[7m"; // 反显：交换前景/背景。用于选中态高亮，明暗无关、任何终端都醒目。
 
 // 职业预设配色 ---------------------------------------------------------------
 //
@@ -498,6 +504,17 @@ export function createTheme(config = {}, options = {}) {
     };
   };
 
+  // 选中态高亮：品牌色背景块 + 强反差前景（浅底用近黑字、深底用近白字）。
+  // 关键：铺满整块背景色，明暗无关、任何终端都醒目——不再依赖 OSC 11 探测是否成功。
+  // enabled=false 时用 "> text" 标记选中，纯文本也能看出高亮。
+  const highlight = (bgHex, fgHex) => {
+    return (text) => {
+      const str = String(text);
+      if (!enabled) return `▶ ${str}`;
+      return `${BOLD}${bg(bgHex)}${fg(fgHex)} ${str} ${RESET}`;
+    };
+  };
+
   const c = spec.colors;
 
   return {
@@ -520,6 +537,10 @@ export function createTheme(config = {}, options = {}) {
     warning: paint(c.warning, { bold: true }),
     danger: paint(c.danger, { bold: true }),
     info: paint(c.info),
+
+    // 选中态：品牌紫背景块 + 近白字。明暗无关，任何终端背景都醒目可读。
+    // 展示层（selectMenu）用它渲染当前高亮项，不再依赖背景探测是否成功。
+    selected: highlight(c.brand, "#FFFFFF"),
 
     // 组合辅助：键值行
     kv(key, value) {
