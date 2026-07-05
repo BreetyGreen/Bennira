@@ -23,7 +23,7 @@
 
 ### 阶段 0 · 回归网（动手前提，非可选）
 
-- [ ] **T1 · 搭 fake-provider 测试骨架**
+- [x] **T1 · 搭 fake-provider 测试骨架** ✅ 2026-07-06
   - 让 `runAgentTurn` 可注入 provider（依赖倒置），避免测试真联网。
   - 喂一组 canned 响应（先按现有 text-JSON 形态），断言 loop round-trip：
     思考 → 执行工具 → 观察回喂 → finish。
@@ -31,6 +31,9 @@
   - **必须在当前（未改造）代码上先跑绿**——这是改 model/repl 前的回归网。
   - 顺带补上 `packages/cli` 零测试的盲区。
   - 文件：`packages/cli/test/agent-loop.test.mjs`（新建）
+  - **落地**：`runAgentTurn` 改为 `export` 且 `provider` 走默认参数（生产不传=零行为变化，测试传 fake=注入）。
+    6 用例：单步 finish / read_file round-trip / search round-trip / write_file 同意即写 /
+    write_file 拒绝不写且回喂拒绝观察 / 非 JSON 兜底 finish。**173 全绿（167+6）**。
 
 ### 阶段 1 · 核心改造
 
@@ -58,3 +61,5 @@
 ## 进度日志
 
 - 2026-07-06：清单建立，全部待做，提交入库。后续每完成一项，回来勾选并追加一行。
+- 2026-07-06：**T1 完成**。`packages/cli` 首个测试文件落地，6 用例锚定改造前 loop 契约，173 全绿。
+  provider 依赖注入就绪，改 model/repl 的回归网已织好。

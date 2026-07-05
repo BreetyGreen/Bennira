@@ -217,9 +217,11 @@ function reportError(t, error) {
 
 // 一轮 agentic 循环：用户说一句 → 模型思考/调工具 → 直到 finish 或触顶。
 // 全程可被 Ctrl+C 中断——按一次停当前轮、回提示符，不退出进程（抄 Codex / Claude Code）。
-async function runAgentTurn({ root, config, t, rl, history, userInput }) {
+// provider 默认由 config 构建（生产路径，行为不变）；测试可注入 fake provider
+// 以在不联网、不需要真实 key 的前提下验证整条 agentic 循环的 round-trip。
+// 默认参数仅在 provider 缺省时求值，故生产调用与改造前完全等价。
+export async function runAgentTurn({ root, config, t, rl, history, userInput, provider = createProvider(root, config) }) {
   const g = t.glyphs;
-  const provider = createProvider(root, config);
   history.push({ role: "user", content: userInput });
 
   // 本轮的中断控制器：绑定 readline 的 SIGINT（Ctrl+C）。
