@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 import {
   appendEvent,
   buildInitMessages,
@@ -25,11 +24,15 @@ import {
   modelReadiness,
   padDisplay,
   parsePlanResponse,
+  PROVIDER_PRESETS,
+  findProviderPreset,
   readConfig,
   readEventLog,
   readProjectMemory,
   saveModelApiKey,
   SCOPES,
+  selectMenu,
+  textInput,
   updateModelConfig,
   updatePermission,
   updateProjectMemory,
@@ -106,95 +109,155 @@ async function setup(args) {
   const g = t.glyphs;
 
   console.log(t.title("Bennira 首次设置向导"));
-  console.log(t.muted("  谨慎、只读、不留痕。凭证只存本地、绝不入库。回车用默认值。"));
+  console.log(t.muted("  谨慎、只读、不留痕。凭证只存本地、绝不入库。"));
+
+  // 是否为真人终端：决定用"方向键菜单"还是"一次性读 stdin"。
+  const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  if (interactive) {
+    console.log(t.muted(`  ${g.arrow} 用 ↑/↓ 或 j/k 选择，回车确认；也可直接按数字键。`));
+  }
   console.log("");
 
-  // 交互 / 非交互双模：
-  // - TTY（真人终端）：用 readline 逐问。
-  // - 非 TTY（管道 / 脚本 / 自动化）：一次性读完 stdin，按行依次作为答案。
-  //   这样 `printf '...' | bennira setup` 也能驱动，且不会出现 readline 挂起。
-  let ask;
-  let rl = null;
+  // 染色配件：菜单指针 / 高亮项 / 灰字 / 标题，全部走主题 token。
+  const menuPaint = {
+    pointer: (s) => t.accent(s),
+    active: (s) => t.accent(s),
+    dim: (s) => t.muted(s),
+    heading: (s) => t.value(s),
+  };
+  const textPaint = { label: (s) => t.value(s), dim: (s) => t.muted(s) };
 
-  if (process.stdin.isTTY) {
-    rl = createInterface({ input: process.stdin, output: process.stdout });
-    ask = (q, def = "") =>
-      new Promise((resolve) => {
-        const hint = def ? t.muted(`（默认 ${def}）`) : "";
-        rl.question(`${t.accent(g.arrow)} ${t.value(q)} ${hint}\n  `, (answer) => {
-          resolve(answer.trim() || def);
-        });
-      });
-  } else {
+  // 非 TTY（管道 / 脚本 / 无法交互的集成终端）：一次性读完 stdin，按行喂默认答案。
+  // 这样 `printf '...' | bennira setup` 仍可驱动，且绝不挂起。
+  let pipedQueue = null;
+  let pipedIdx = 0;
+  if (!interactive) {
     const piped = await readAllStdin();
-    const queue = piped.split(/\r?\n/);
-    let idx = 0;
-    ask = async (q, def = "") => {
-      const hint = def ? t.muted(`（默认 ${def}）`) : "";
-      const raw = idx < queue.length ? queue[idx++] : "";
-      const value = (raw || "").trim() || def;
-      console.log(`${t.accent(g.arrow)} ${t.value(q)} ${hint}  ${t.muted(value || "(空)")}`);
-      return value;
-    };
+    pipedQueue = piped.split(/\r?\n/);
   }
+  const nextPiped = (def) => {
+    const raw = pipedQueue && pipedIdx < pipedQueue.length ? pipedQueue[pipedIdx++] : "";
+    return (raw || "").trim() || def;
+  };
 
-  try {
-    // 0) 配置作用域：全局（一次配好所有项目）还是仅当前项目
-    console.log(t.heading("① 配置作用域"));
-    console.log(t.muted("  global：写入 ~/.bennira，所有项目共享（推荐，配一次到处用）"));
-    console.log(t.muted("  project：只写当前项目 .bennira，覆盖全局设置"));
-    const scopeAns = await ask("配置写到哪一层？(global/project)", "global");
-    const scope = /^p(roject)?$/i.test(scopeAns) ? SCOPES.PROJECT : SCOPES.GLOBAL;
-    const opt = { scope };
-    console.log("");
-
-    // 1) 主题 / 版本线
-    console.log(t.heading("② 配色主题"));
-    const themeItems = listThemes(readConfig(root))
-      .filter((i) => i.kind === "preset")
-      .map((i) => i.id);
-    console.log(t.muted(`  可选：${themeItems.join(" / ")}`));
-    const themeId = await ask("选择职业配色", readConfig(root).theme?.active || "thief");
-    if (JOB_THEMES[themeId]) {
-      updateThemeConfig(root, { active: themeId }, opt);
+  // 统一入口：有限选项走方向键菜单 / 非 TTY 匹配管道行；自由文本走输入框 / 非 TTY 取管道行。
+  const choose = async (question, choices, def) => {
+    if (interactive) {
+      return selectMenu(question, choices, { def, paint: menuPaint });
     }
-    console.log("");
+    // 非 TTY：把管道行归一化到某个 value（支持前缀匹配，如 "g" → "global"）。
+    const ans = nextPiped(def);
+    const hit = choices.find(
+      (c) => c.value === ans || c.value.startsWith(ans) || (ans && c.value.startsWith(ans[0]))
+    );
+    const value = hit ? hit.value : def;
+    console.log(`${t.accent(g.arrow)} ${t.value(question)}  ${t.muted(value)}`);
+    return value;
+  };
+  const askText = async (question, def = "", opts = {}) => {
+    if (interactive) {
+      return textInput(question, { def, paint: textPaint, ...opts });
+    }
+    const value = nextPiped(def);
+    const hint = def ? t.muted(`（默认 ${def}）`) : "";
+    console.log(`${t.accent(g.arrow)} ${t.value(question)} ${hint}  ${t.muted(value || "(空)")}`);
+    return value;
+  };
 
-    // 2) 模型接入
-    console.log(t.heading("③ 模型接入（OpenAI 兼容）"));
+  // 0) 配置作用域：全局（一次配好所有项目）还是仅当前项目
+  console.log(t.heading("① 配置作用域"));
+  const scopeVal = await choose(
+    "配置写到哪一层？",
+    [
+      { value: "global", label: "global", hint: "写入 ~/.bennira，所有项目共享（推荐）" },
+      { value: "project", label: "project", hint: "只写当前项目 .bennira，覆盖全局" },
+    ],
+    "global"
+  );
+  const scope = scopeVal === "project" ? SCOPES.PROJECT : SCOPES.GLOBAL;
+  const opt = { scope };
+  console.log("");
+
+  // 1) 主题 / 版本线
+  console.log(t.heading("② 配色主题"));
+  const themeItems = listThemes(readConfig(root))
+    .filter((i) => i.kind === "preset")
+    .map((i) => ({ value: i.id, label: i.id, hint: i.character ? `（${i.character}）` : "" }));
+  const themeId = await choose(
+    "选择职业配色",
+    themeItems,
+    readConfig(root).theme?.active || "thief"
+  );
+  if (JOB_THEMES[themeId]) {
+    updateThemeConfig(root, { active: themeId }, opt);
+  }
+  console.log("");
+
+  // 2) 模型接入 —— 先选服务商（自动带出 baseURL/模型名），再确认/微调
+  console.log(t.heading("③ 模型接入"));
+  console.log(t.muted("  选一家服务商即可，网址和默认模型会自动带出；只有自定义才需手填。"));
+
+  // 已有配置时，默认高亮匹配的预设；匹配不到就落到 custom。
+  const existingBaseURL = readConfig(root).model?.baseURL || "";
+  const matchedPreset = PROVIDER_PRESETS.find(
+    (p) => p.baseURL && existingBaseURL && p.baseURL === existingBaseURL
+  );
+  const providerId = await choose(
+    "选择模型服务商",
+    PROVIDER_PRESETS.map((p) => ({
+      value: p.id,
+      label: p.label,
+      hint: p.model ? `${p.model} · ${p.hint}` : p.hint,
+    })),
+    matchedPreset ? matchedPreset.id : (existingBaseURL ? "custom" : "deepseek")
+  );
+  const preset = findProviderPreset(providerId) || findProviderPreset("custom");
+
+  // 预设带出默认值：选了具体服务商，baseURL/模型名默认就填好，用户回车即用、想改也能改；
+  // 选 custom 则默认值回到"空 / gpt-4o-mini"，走原来的手填。
+  const baseURLDefault = preset.baseURL || existingBaseURL || "";
+  const modelDefault = preset.model || readConfig(root).model?.model || "gpt-4o-mini";
+
+  if (preset.id === "custom") {
     console.log(t.muted("  例：https://api.openai.com/v1 或本地 http://localhost:11434/v1"));
-    const baseURL = await ask("模型 baseURL", readConfig(root).model?.baseURL || "");
-    const model = await ask("模型名称", readConfig(root).model?.model || "gpt-4o-mini");
-    updateModelConfig(root, { baseURL, model }, opt);
+  } else {
+    console.log(t.muted(`  已选 ${preset.label}：直接回车即用下面带出的默认值，想改也可以。`));
+  }
+  const baseURL = await askText("模型 baseURL", baseURLDefault);
+  const model = await askText("模型名称", modelDefault);
+  updateModelConfig(root, { baseURL, model }, opt);
 
-    console.log(t.muted("  API key 只写入 secrets.json（已 gitignore），不进 config、不上传。"));
-    const apiKey = await ask("API key（留空则稍后用环境变量 BENNIRA_API_KEY）", "");
-    if (apiKey) {
-      const path = saveModelApiKey(root, apiKey, opt);
-      console.log(`  ${t.success(g.found)} ${t.muted(`已安全写入 ${path}`)}`);
-      // 全局 secrets 在 ~，不受项目 .gitignore 约束；仅项目层需要保护。
-      // 修复：不再只警告，而是自动把 secrets.json 写进项目 .gitignore（幂等）。
-      if (scope === SCOPES.PROJECT) {
-        const { changed } = ensureSecretsIgnored(root);
-        if (changed) {
-          console.log(`  ${t.success(g.found)} ${t.muted("已自动在 .gitignore 中排除 secrets.json，凭证不会入库。")}`);
-        } else {
-          console.log(`  ${t.muted(`${g.bullet} .gitignore 已排除 secrets.json，凭证安全。`)}`);
-        }
+  console.log(t.muted("  API key 只写入 secrets.json（已 gitignore），不进 config、不上传。"));
+  const apiKey = await askText("API key（留空则稍后用环境变量 BENNIRA_API_KEY）", "");
+  if (apiKey) {
+    const path = saveModelApiKey(root, apiKey, opt);
+    console.log(`  ${t.success(g.found)} ${t.muted(`已安全写入 ${path}`)}`);
+    // 全局 secrets 在 ~，不受项目 .gitignore 约束；仅项目层需要保护。
+    if (scope === SCOPES.PROJECT) {
+      const { changed } = ensureSecretsIgnored(root);
+      if (changed) {
+        console.log(`  ${t.success(g.found)} ${t.muted("已自动在 .gitignore 中排除 secrets.json，凭证不会入库。")}`);
+      } else {
+        console.log(`  ${t.muted(`${g.bullet} .gitignore 已排除 secrets.json，凭证安全。`)}`);
       }
     }
-    console.log("");
-
-    // 3) 网络权限门
-    console.log(t.heading("④ 网络权限"));
-    console.log(t.muted("  盗贼默认谨慎（deny）。调云端模型需要联网——是否现在开启？"));
-    const allow = await ask("允许联网调用模型？(y/N)", "N");
-    const networkAllowed = /^y(es)?$/i.test(allow);
-    updatePermission(root, "network", networkAllowed ? "allow" : "deny", opt);
-    console.log("");
-  } finally {
-    if (rl) rl.close();
   }
+  console.log("");
+
+  // 3) 网络权限门
+  console.log(t.heading("④ 网络权限"));
+  console.log(t.muted("  盗贼默认谨慎（deny）。调云端模型需要联网。"));
+  const netVal = await choose(
+    "允许联网调用模型？",
+    [
+      { value: "deny", label: "deny", hint: "保持谨慎，暂不联网（默认）" },
+      { value: "allow", label: "allow", hint: "开启联网，init/plan/会话可调模型" },
+    ],
+    "deny"
+  );
+  const networkAllowed = netVal === "allow";
+  updatePermission(root, "network", networkAllowed ? "allow" : "deny", opt);
+  console.log("");
 
   // 汇总就绪状态
   const config = readConfig(root);
